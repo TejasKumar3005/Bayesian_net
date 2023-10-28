@@ -262,9 +262,28 @@ int main()
 {
 	network Alarm;
 	Alarm=read_network();
+	float maxscore = -1 ; 
+	network best_Alarm = Alarm ; 
     
-// Example: to do something
-	cout<<"Perfect! Hurrah! \n";
+	int iterations = 100 ; 
+	network best_Alarm = Alarm;
+	while(iterations--){
+		random_initialise_data("records.dat", "new_records.dat") ; 
+		evaluate_CPT(Alarm, "new_records.dat") ; 
+		float epsilon = 0.005 ; 
+		float delta = 1.0  ; 
+		while(delta > epsilon){
+			network before = Alarm ; 
+			EM_step(Alarm,"records.dat") ; 
+			delta = calc_change(before, Alarm) ; 
+		}
+		float score = eval_score(Alarm) ; 
+		if (score > maxscore) best_Alarm = Alarm ; 
+	}
+
+	// output alarm
+
+	// cout<<"Perfect! Hurrah! \n";
 	
 }
 
