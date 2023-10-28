@@ -5,6 +5,14 @@
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
+#include <random>
+#include <chrono>
+#include <algorithm>
+// #include <iostream>
+// #include <fstream>
+// #include <vector>
+#include <ctime>
+// #include <cstdlib>
 
 
 // Format checker just assumes you have Alarm.bif and Solved_Alarm.bif (your file) in current directory
@@ -85,6 +93,7 @@ public:
 
  // The whole network represted as a list of nodes
 class network{
+	friend float calc_change(network& before, network& after); // Declare calc_change as a friend
 
 	list <Graph_Node> Pres_Graph;
 
@@ -139,9 +148,36 @@ public:
             cout<<"node not found\n";
         return listIt;
     }
-	
+
+
+
+	float calc_change(network& before, network& after) {
+		float maxChange = 0.0;
+
+		list<Graph_Node>::iterator beforeNode, afterNode;
+
+		for (beforeNode = before.Pres_Graph.begin(), afterNode = after.Pres_Graph.begin();
+			beforeNode != before.Pres_Graph.end() && afterNode != after.Pres_Graph.end();
+			++beforeNode, ++afterNode) {
+			vector<float> beforeCPT = beforeNode->get_CPT();
+			vector<float> afterCPT = afterNode->get_CPT();
+
+			// Calculate the maximum change in CPT values for this node
+			for (int i = 0; i < beforeCPT.size(); i++) {
+				float change = abs(beforeCPT[i] - afterCPT[i]);
+				if (change > maxChange) {
+					maxChange = change;
+				}
+			}
+		}
+
+		return maxChange;
+	}
+
 
 };
+
+
 
 network read_network()
 {
@@ -258,23 +294,234 @@ network read_network()
 }
 
 
+
+void random_initialise_data(const string &inputDataset, const string &outputDataset, network &Alarm) {
+    ifstream input(inputDataset);
+    ofstream output(outputDataset);
+
+    if (!input.is_open() || !output.is_open()) {
+        cout << "Failed to open input or output dataset file." << endl;
+        return;
+    }
+
+    string line;
+    while (getline(input, line)) {
+        vector<string> record;
+        stringstream ss(line);
+        string value;
+        int missingIndex = -1; // Index of the missing value
+
+        int index = 0;
+        while (ss >> value) {
+            if (value == "\"?\"") {
+                missingIndex = index;
+                record.push_back(value); // Placeholder for the missing value
+            } else {
+                record.push_back(value);
+            }
+            index++;
+        }
+
+        if (missingIndex != -1) {
+            // Find the corresponding node in the Alarm network
+            list<Graph_Node>::iterator node = Alarm.get_nth_node(missingIndex);
+            vector<string> possibleValues = node->get_values();
+            
+            // Randomly select a value from the possible values
+            int randomIndex = rand() % possibleValues.size();
+            record[missingIndex] = possibleValues[randomIndex];
+        }
+
+        // Write the updated record to the output dataset
+        output << record[0];
+        for (int i = 1; i < record.size(); i++) {
+            output << " " << record[i];
+        }
+        output << endl;
+    }
+
+    input.close();
+    output.close();
+}
+
+
+void evaluate_CPT(network &Alarm, const string &dataFile) {
+    ifstream infile(dataFile);
+    if (!infile.is_open()) {
+        cerr << "Error: Unable to open data file." << endl;
+        return;
+    }
+    vector<vector<string>> dataset;
+    string line;
+    while (getline(infile, line)) {
+        stringstream ss(line);
+        string value;
+        vector<string> record;
+        while (ss >> value) {
+            record.push_back(value);
+        }
+        dataset.push_back(record);
+    }
+    infile.close();
+
+    int numSamples = dataset.size();
+
+    for (int nodeIndex = 0; nodeIndex < Alarm.netSize(); nodeIndex++) {
+        list<Graph_Node>::iterator currentNode = Alarm.get_nth_node(nodeIndex);
+        int nvalues = currentNode->get_nvalues();
+        vector<float> CPT(nvalues, 0.0);
+        vector<float> counts(nvalues, 1.0);
+
+		// the following part seems wrong. please correct it 
+
+        // for (vector<string> &record : dataset) {
+        //     bool matches = true;
+        //     for (int i = 0; i < currentNode->get_Parents().size(); i++) {
+        //         int parentIndex = Alarm.get_index(currentNode->get_Parents()[i]);
+        //         if (record[parentIndex] != currentNode->get_values()[i]) {
+        //             matches = false;
+        //             break;
+        //         }
+        //     }
+
+        //     if (matches) {
+        //         // Increment the count for the corresponding value of the current node
+        //         int valueIndex = distance(currentNode->get_values().begin(),
+        //             find(currentNode->get_values().begin(), currentNode->get_values().end(), record[nodeIndex]));
+        //         counts[valueIndex]++;
+        //     }
+        // }
+
+        // Calculate the CPT with Laplace smoothing
+        float total = 0;
+        for (int i = 0; i < nvalues; i++) {
+            CPT[i] = counts[i] / (numSamples + nvalues); // Laplace smoothing
+            total += CPT[i];
+        }
+
+        // Normalize the CPT values
+        for (int i = 0; i < nvalues; i++) {
+            CPT[i] /= total;
+        }
+
+        currentNode->set_CPT(CPT);
+    }
+}
+
+
+// Define a function to sample a value from a given probability distribution
+string sample_value(const vector<float>& probabilities) {
+    if (probabilities.size() == 0) {
+        return ""; // Empty probabilities, return an empty string
+    }
+
+    // Create a random engine with a seed based on the current time
+    unsigned seed = static_cast<unsigned>(chrono::system_clock::now().time_since_epoch().count());
+    default_random_engine generator(seed);
+
+    // Create a discrete distribution using the probabilities
+    discrete_distribution<int> distribution(probabilities.begin(), probabilities.end());
+
+    // Sample a random value
+    int sampledIndex = distribution(generator);
+    return to_string(sampledIndex); // Convert the index to a string
+}
+
+// EM Step function
+void EM_step(network& Alarm, const string& dataFile, const string& newDataFile) {
+    // Read the dataset from the original file
+    ifstream datasetFile(dataFile);
+    if (!datasetFile) {
+        cerr << "Error: Cannot open the dataset file." << endl;
+        return;
+    }
+
+    // Create a new dataset file for updated records
+    ofstream newDatasetFile(newDataFile);
+    if (!newDatasetFile) {
+        cerr << "Error: Cannot open the new dataset file." << endl;
+        datasetFile.close();
+        return;
+    }
+
+    vector<string> datasetRecord;
+    string line;
+
+    // Iterate through the dataset records
+    while (getline(datasetFile, line)) {
+        datasetRecord.clear();
+        istringstream recordStream(line);
+        string value;
+
+        // Split the record into individual values
+        while (recordStream >> value) {
+            datasetRecord.push_back(value);
+        }
+
+        // Initialize a variable to track the index of the "?" value
+        int missingIndex = -1;
+
+        // Find the index of the "?" value, if it exists in the record
+        for (int i = 0; i < datasetRecord.size(); i++) {
+            if (datasetRecord[i] == "?") {
+                missingIndex = i;
+                break;
+            }
+        }
+
+        // If there is a "?" in the record, update it
+        if (missingIndex != -1) {
+			// Initialize a vector to store updated records
+			vector<string> updatedRecord = datasetRecord;
+
+			// Retrieve the node corresponding to the "?" value
+			list<Graph_Node>::iterator node = Alarm.get_nth_node(missingIndex);
+			vector<float> CPT = node->get_CPT();
+
+			// Create two new records based on the probabilities
+			for (int i = 0; i < 2; i++) {
+				// Sample a value based on the CPT
+				string sampledValue = sample_value(CPT);
+
+				// Update the missing value in the record
+				updatedRecord[missingIndex] = node->get_values()[stoi(sampledValue)];
+
+				// Write the updated record to the new dataset file
+				newDatasetFile << updatedRecord[0];
+				for (int j = 1; j < updatedRecord.size(); j++) {
+					newDatasetFile << " " << updatedRecord[j];
+				}
+				newDatasetFile << endl;
+			}
+		}
+		else {
+            // If there is no "?", write the original record as-is to the new dataset file
+            newDatasetFile << line << endl;
+        }
+    }
+
+    // Close the dataset files
+    datasetFile.close();
+    newDatasetFile.close();
+}
+
+
+
 int main()
 {
 	network Alarm;
 	Alarm=read_network();
 	float maxscore = -1 ; 
-	network best_Alarm = Alarm ; 
-    
 	int iterations = 100 ; 
 	network best_Alarm = Alarm;
 	while(iterations--){
-		random_initialise_data("records.dat", "new_records.dat") ; 
+		random_initialise_data("records.dat", "new_records.dat", Alarm) ; 
 		evaluate_CPT(Alarm, "new_records.dat") ; 
 		float epsilon = 0.005 ; 
 		float delta = 1.0  ; 
 		while(delta > epsilon){
 			network before = Alarm ; 
-			EM_step(Alarm,"records.dat") ; 
+			EM_step(Alarm,"records.dat", "new_records.dat") ; 
 			delta = calc_change(before, Alarm) ; 
 		}
 		float score = eval_score(Alarm) ; 
