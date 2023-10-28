@@ -446,6 +446,7 @@ void EM_step(network& Alarm, const string& dataFile, const string& newDataFile) 
 
     vector<string> datasetRecord;
     string line;
+	int counter = 0; 
 
     // Iterate through the dataset records
     while (getline(datasetFile, line)) {
@@ -465,6 +466,7 @@ void EM_step(network& Alarm, const string& dataFile, const string& newDataFile) 
         for (int i = 0; i < datasetRecord.size(); i++) {
             if (datasetRecord[i] == "?") {
                 missingIndex = i;
+				counter++ ; 
                 break;
             }
         }
@@ -503,6 +505,8 @@ void EM_step(network& Alarm, const string& dataFile, const string& newDataFile) 
     // Close the dataset files
     datasetFile.close();
     newDatasetFile.close();
+
+	if (counter%40==0) evaluate_CPT(Alarm, "new_records.dat") ; 
 }
 
 
