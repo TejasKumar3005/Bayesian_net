@@ -264,7 +264,26 @@ int main()
 	Alarm=read_network();
     
 // Example: to do something
-	cout<<"Perfect! Hurrah! \n";
+
+	// 1. initialise CPT values to something(preferably using the dataset) 
+	// 2. find the probabilities of ? to be 1 or 0 and then make new dataset
+	// 3. calculate new CPT(dont forget smoothing) using this dataset and then delete this dataset
+	// 4. repeat step 2, 3 until the max difference in all the CPT values is less than epsilon
+	// 5. write the CPT values in the required file 
+
+
+	CPT_initialise() ; 
+	double epsilon = 0.05 ; 
+	// store old CPT
+	while (true){
+		estimate_dataset() ; 
+		maximise_CPT() 
+		// double new_max_CPT_change = max change in new and old CPT values
+		if (new_max_CPT_change<= epsilon) break ; 
+	}
+	write_output() ; 
+
+	// cout<<"Perfect! Hurrah! \n";
 	
 }
 
