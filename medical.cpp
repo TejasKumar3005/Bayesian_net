@@ -7,6 +7,20 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <cstdlib>
+// #include <iostream>
+// #include <string>
+// #include <vector>
+// #include <list>
+// #include <fstream>
+// #include <sstream>
+// #include <cstdlib>
+#include <random>
+#include <chrono>
+#include <algorithm>
+// #include <iostream>
+// #include <fstream>
+// #include <vector>
+#include <ctime>
 
 
 // Format checker just assumes you have Alarm.bif and Solved_Alarm.bif (your file) in current directory
@@ -88,6 +102,7 @@ public:
 
  // The whole network represted as a list of nodes
 class network{
+	friend float calc_change(network& before, network& after); // Declare calc_change as a friend
 
 	vector <Graph_Node> Pres_Graph;
 
@@ -164,9 +179,36 @@ public:
             node.markov_blanket = markov_blanket_vector;
         }
     }
+
 	
+	float calc_change(network& before, network& after) {
+		float maxChange = 0.0;
+
+		Graph_Node* beforeNode;
+		Graph_Node* afterNode;
+
+		for (int index = 0 ; index < Pres_Graph.size() ; index++) {
+			Graph_Node beforeNode = before.get_nth_node(index) ; 
+			Graph_Node afterNode = after.get_nth_node(index) ; 
+			vector<float> beforeCPT = beforeNode.get_CPT();
+			vector<float> afterCPT = afterNode.get_CPT();
+
+			// Calculate the maximum change in CPT values for this node
+			for (int i = 0; i < beforeCPT.size(); i++) {
+				float change = abs(beforeCPT[i] - afterCPT[i]);
+				if (change > maxChange) {
+					maxChange = change;
+				}
+			}
+		}
+
+		return maxChange;
+	}
+
 
 };
+
+
 
 class Dataset {
 private:
@@ -227,6 +269,20 @@ public:
     }
 
     // Other utility functions can be added as needed...
+	// check the below fucntion ?
+	void update_value(int row, int col, const string& value) {
+        if (row < data_matrix.size() && col < data_matrix[row].size()) {
+            if (value == "?") {
+                data_matrix[row][col] = -1;
+            } else {
+                if (value_map.find(value) == value_map.end()) {
+                    value_map[value] = value_list.size();
+                    value_list.push_back(value);
+                }
+                data_matrix[row][col] = value_map[value];
+            }
+        }
+    }
 };
 
 
@@ -381,6 +437,84 @@ network read_network()
 }
 
 
+
+
+// functions used in int main: 
+void random_initialise_data(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
+    const vector<pair<int, int>>& missing_positions = dataset2.get_missing_values_positions();
+
+    for (const auto& position : missing_positions) {
+        int row = position.first;
+        int col = position.second;
+
+        Graph_Node node = Alarm.get_nth_node(col);
+        vector<string> possibleValues = node.get_values();
+
+        // Randomly select a value from the possible values in dataset1
+        int randomIndex = rand() % possibleValues.size();
+        string replacementValue = possibleValues[randomIndex];
+
+        // Update the missing value in dataset2
+        dataset2.update_value(row, col, replacementValue);
+    }
+}
+
+
+string sample_value(const vector<float>& probabilities) {
+    if (probabilities.size() == 0) {
+        return ""; // Empty probabilities, return an empty string
+    }
+
+    // Create a random engine with a seed based on the current time
+    unsigned seed = static_cast<unsigned>(chrono::system_clock::now().time_since_epoch().count());
+    default_random_engine generator(seed);
+
+    // Create a discrete distribution using the probabilities
+    discrete_distribution<int> distribution(probabilities.begin(), probabilities.end());
+
+    // Sample a random value
+    int sampledIndex = distribution(generator);
+    return to_string(sampledIndex); // Convert the index to a string
+}
+
+
+void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
+    int missingCounter = 0;
+    
+    for (const auto& missingValue : dataset1.get_missing_values_positions()) {
+        int row = missingValue.first;
+        int col = missingValue.second;
+
+        if (col >= dataset1.get_record(row).size()) {
+            cerr << "Error: Invalid missing value position." << endl;
+            continue;
+        }
+
+        // Retrieve the node corresponding to the missing value
+        Graph_Node node = Alarm.get_nth_node(col);
+        vector<float> CPT = node.get_CPT();
+
+        // Sample a value based on the CPT
+        string sampledValue = sample_value(CPT);
+
+        // Update dataset2 with the sampled value
+
+		// the follwoing seems wrong ?? shouldnt we use update_value function ?
+        dataset2.get_record(row)[col] = node.get_values()[stoi(sampledValue)];
+
+        missingCounter++;
+
+        if (missingCounter % 40 == 0) {
+            evaluate_CPT(Alarm, dataset2); // Update CPT table after sampling every 40 missing values
+        }
+    }
+}
+
+
+
+
+
+
 int main()
 {
 	network Alarm;
@@ -407,6 +541,34 @@ int main()
 	// write_output() ; 
 
 	// cout<<"Perfect! Hurrah! \n";
+
+
+	network Alarm;
+	Alarm=read_network();
+	float maxscore = -1 ; 
+	int iterations = 100 ; 
+	network best_Alarm = Alarm;
+	Dataset dataset1  ; 
+	read_data_file("records.dat", dataset1) ; 
+	Dataset dataset2 = dataset1  ; 
+
+	while(iterations--){
+		random_initialise_data(dataset1, dataset2, Alarm) ; 
+		evaluate_CPT(Alarm, dataset2) ; 
+		float epsilon = 0.005 ; 
+		float delta = 1.0  ; 
+		while(delta > epsilon){
+			network before = Alarm ; 
+			EM_step(dataset1, dataset2, Alarm) ; 
+			delta = calc_change(before, Alarm) ; 
+		}
+		float score = eval_score(Alarm) ; 
+		if (score > maxscore) best_Alarm = Alarm ; 
+	}
+
+
+
+
 	
 }
 
