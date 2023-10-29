@@ -182,6 +182,10 @@ public:
         }
     }
 
+    void set_nth_node(int n, Graph_Node node){
+        Pres_Graph[n] = node;
+    }
+
 
 
 };
@@ -248,8 +252,9 @@ public:
     void add_record(const vector<string>& record) {
         vector<int> int_record;
         for (int i = 0; i < record.size(); ++i) {
-            const string& value = record[i];
-            if (value == "?") {
+            const string value = record[i];
+            if (value.substr(1,value.size()-2) == "?") {
+                // cout << "in ?????" << endl;
                 int_record.push_back(-1);
                 missing_values_positions.push_back({static_cast<int>(data_matrix.size()), i});
             } else {
@@ -257,7 +262,13 @@ public:
                     variable_value_map.resize(i+1);
                 }
                 if (variable_value_map[i].find(value) == variable_value_map[i].end()) {
-                   cerr << "Error: Invalid value " << value << " for variable " << i << endl;
+                    // cout all keys of variable_value_map[i]
+                    for (auto it = variable_value_map[i].begin(); it != variable_value_map[i].end(); it++){
+                        cout << it->first << endl;
+                    }
+                    cout << value << "hi" << endl;
+                    cout << i << endl;
+                   cout << "Error: Invalid value " << value << " for variable " << i << endl;
                 }
                 int_record.push_back(variable_value_map[i][value]);
             }
@@ -323,15 +334,13 @@ public:
 
     // Other utility functions can be added as needed...
 	// check the below fucntion ?
-	void update_value(int row, int col, const string& value) {
+	void update_value(int row, int col, int value) {
         if (row < data_matrix.size() && col < data_matrix[row].size()) {
-            if (value == "?") {
+            if (value == -1) {
                 data_matrix[row][col] = -1;
             } else {
-                if (variable_value_map[col].find(value) == variable_value_map[col].end()) {
-                    cerr << "Error: Invalid value " << value << " for variable " << col << endl;
-                }
-                data_matrix[row][col] = variable_value_map[col][value];
+                
+                data_matrix[row][col] = value;
             }
         }
     }
@@ -340,17 +349,17 @@ public:
 
 vector<string> split_record(const string& line) {
     // Remove the first and last quote
-    string trimmed = line.substr(1, line.size() - 2);
+    string trimmed = line;
 
     // Split the string by the delimiter '" "'
     vector<string> record;
     size_t start = 0;
-    size_t end = trimmed.find("\" \"");
+    size_t end = trimmed.find(" ");
     
     while (end != string::npos) {
         record.push_back(trimmed.substr(start, end - start));
-        start = end + 3; // move past the found delimiter
-        end = trimmed.find("\" \"", start);
+        start = end + 1; // move past the found delimiter
+        end = trimmed.find(" ", start);
     }
     
     // Push the last value after the last delimiter
@@ -422,6 +431,10 @@ network read_network()
      					ss2>>temp;
     				}
      				Graph_Node new_node(name,values.size(),values);
+                    // cout all values
+                    for (int i = 0; i < values.size(); ++i) {
+                        cout << values[i] << " "<< endl;
+                    }
      				int pos=Alarm.addNode(new_node);
 
      				
@@ -512,14 +525,14 @@ void random_initialise_data(Dataset& dataset1, Dataset& dataset2, network& Alarm
         string replacementValue = possibleValues[randomIndex];
 
         // Update the missing value in dataset2
-        dataset2.update_value(row, col, replacementValue);
+        dataset2.update_value(row, col, randomIndex);
     }
 }
 
 
-string sample_value(const vector<float>& probabilities) {
+int sample_value(const vector<float>& probabilities) {
     if (probabilities.size() == 0) {
-        return ""; // Empty probabilities, return an empty string
+        return -1; // Empty probabilities, return an empty string
     }
 
     // Create a random engine with a seed based on the current time
@@ -531,13 +544,15 @@ string sample_value(const vector<float>& probabilities) {
 
     // Sample a random value
     int sampledIndex = distribution(generator);
-    return to_string(sampledIndex); // Convert the index to a string
+    return sampledIndex; // Convert the index to a string
 }
 
 void evaluate_CPT(network& Alarm, Dataset& dataset) {
     for (int i = 0; i < Alarm.netSize(); ++i) {
         Graph_Node node = Alarm.get_nth_node(i);
         vector<string> values = node.get_values();
+        // cout << "i " << i << endl ;
+        // cout << "size " << dataset.counts.size
         vector<vector<int>> counts = dataset.counts[i];
         vector<float> CPT(values.size()*counts.size(), 0.0);
         vector<int> parents_pos = node.get_Parents_index();
@@ -551,6 +566,7 @@ void evaluate_CPT(network& Alarm, Dataset& dataset) {
             }
         }
         node.set_CPT(CPT);
+        Alarm.set_nth_node(i, node);
     }
 }
 
@@ -572,12 +588,12 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
         vector<float> CPT = node.get_CPT();
 
         // Sample a value based on the CPT
-        string sampledValue = sample_value(CPT);
+        int sampledValue = sample_value(CPT);
 
         // Update dataset2 with the sampled value
 
 		// the follwoing seems wrong ?? shouldnt we use update_value function ?
-        dataset2.get_record(row)[col] = stoi(sampledValue);
+        dataset2.update_value(row,col, sampledValue);
 
         missingCounter++;
 
@@ -623,12 +639,15 @@ int main()
 	float maxscore = -1 ; 
 	int iterations = 100 ; 
 	network best_Alarm = Alarm;
-	Dataset dataset1  ; 
+	Dataset dataset1; 
+    dataset1.set_variable_value_map(Alarm);
 	read_data_file("records.dat", dataset1) ; 
 	Dataset dataset2 = dataset1  ; 
 
 	while(iterations--){
 		random_initialise_data(dataset1, dataset2, Alarm) ; 
+        dataset2.set_counts(Alarm);
+        
 		evaluate_CPT(Alarm, dataset2) ; 
 		float epsilon = 0.005 ; 
 		float delta = 1.0; 
