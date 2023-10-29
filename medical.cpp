@@ -258,6 +258,84 @@ network read_network()
 }
 
 
+void CPT_initialise(network &Alarm) {
+    // Loop through each node in the network
+	// maybe make this less time expensive by including the list of graph nodes of a network in public
+    for (int i = 0; i < Alarm.netSize(); i++) {
+        list<Graph_Node>::iterator node = Alarm.get_nth_node(i);
+        vector<float> current_CPT = node->get_CPT();
+		float uniform_prob = 1.0 / node->get_nvalues();
+		for (int j = 0; j < node->get_nvalues(); j++) {
+			current_CPT[j] = uniform_prob;
+		}
+		node->set_CPT(current_CPT);
+    }
+}
+
+
+void estimate_dataset(network &Alarm, const string &inputDataset, const string &outputDataset) {
+    ifstream input(inputDataset);
+    ofstream output(outputDataset);
+
+    if (!input.is_open() || !output.is_open()) {
+        cout << "Failed to open input or output dataset file." << endl;
+        return;
+    }
+
+    string line;
+    while (getline(input, line)) {
+		// maybe check the following 
+        stringstream ss(line);
+        vector<string> record;
+        string value;
+        while (ss >> value) {
+            record.push_back(value);
+        }
+
+        // Find the index of the node with missing value
+        int missingIndex = -1;
+        for (int i = 0; i < record.size(); i++) {
+            if (record[i] == "?") {
+                missingIndex = i;
+                break;
+            }
+        }
+
+        if (missingIndex != -1) {
+            list<Graph_Node>::iterator node = Alarm.get_nth_node(missingIndex);
+            vector<float> CPT = node->get_CPT();
+
+
+			// the code below is wrong. what we have to do is calculate P[X=2/given everything] = P[X/given parents]*(for all children Y of X)*P[Y/given parents]
+			// note here that number of values X can take can be more than 2 so calculate for all of them. 
+			// see the else portion below: also write the weight of each dataset along with dataset 
+
+            // float probMissingIsOne = CPT[node->get_nvalues() - 1]; // Probability of missing value being 1
+
+            // // Create two new records based on the probability
+            // for (int i = 0; i < 2; i++) {
+            //     vector<string> newRecord = record;
+            //     newRecord[missingIndex] = (i == 0) ? "0" : "1";
+            //     output << newRecord[0];
+            //     for (int j = 1; j < newRecord.size(); j++) {
+            //         output << " " << newRecord[j];
+            //     }
+            //     output << endl;
+            // }
+
+
+        } else {
+            // If no missing value, just copy the record to the output dataset
+            output << 1.0<<" "<<line << endl;
+        }
+    }
+
+    input.close();
+    output.close();
+}
+
+
+
 int main()
 {
 	network Alarm;
@@ -271,15 +349,19 @@ int main()
 	// 4. repeat step 2, 3 until the max difference in all the CPT values is less than epsilon
 	// 5. write the CPT values in the required file 
 
-
-	CPT_initialise() ; 
-	double epsilon = 0.05 ; 
-	// store old CPT
-	while (true){
-		estimate_dataset() ; 
-		maximise_CPT() 
-		// double new_max_CPT_change = max change in new and old CPT values
-		if (new_max_CPT_change<= epsilon) break ; 
+	int iterations = 100 ; 
+	network best_Alarm = Alarm;
+	while(iterations--){
+		CPT_initialise(Alarm) ; 
+		double epsilon = 0.05 ; 
+		// store old CPT
+		while (true){
+			estimate_dataset(Alarm, "records.dat", "temp_records.dat");
+			maximise_CPT() 
+			// double new_max_CPT_change = max change in new and old CPT values
+			if (new_max_CPT_change<= epsilon) break ; 
+		}
+		// evaluate score of this network. if better than previous, update best_Alarm
 	}
 	write_output() ; 
 
