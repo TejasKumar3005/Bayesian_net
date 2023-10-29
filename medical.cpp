@@ -15,11 +15,13 @@
 
 // Format checker just assumes you have Alarm.bif and Solved_Alarm.bif (your file) in current directory
 using namespace std;
-
+float m = 1.0 ; 
 // Our graph consists of a list of nodes where each node is represented as follows:
 class Graph_Node{
 
 private:
+
+public:
 	string Node_Name;  // Variable name 
 	vector<int> Children; // Children of a particular node - these are index of nodes in graph.
 	vector<string> Parents; // Parents of a particular node- note these are names of parents
@@ -27,14 +29,8 @@ private:
 	int nvalues;  // Number of categories a variable represented by this node can take
 	vector<string> values; // Categories of possible values
 	vector<float> CPT; // conditional probability table as a 1-d array . Look for BIF format to understand its meaning
-
-public:
     vector<int> markov_blanket; // Markov blanket of a node- index of nodes in graph
 	// Constructor- a node is initialised with its name and its categories
-
-
-	// dont store markov blanket 
-	// also store counts and total counts
     Graph_Node(string name,int n,vector<string> vals)
 	{
 		Node_Name=name;
@@ -136,23 +132,25 @@ public:
     Graph_Node get_nth_node(int n)
     {
     
-       if (n>=Pres_Graph.size()){cerr<<"index out of range\n";}
+    //    if (n>=Pres_Graph.size()){cerr<<"index out of range\n";}
         
-        return Pres_Graph[n];
+        return Pres_Graph[n] ;
         
             
     }
-    void set_nth_node(int n, Graph_Node node)
-    {
+    //get the iterator of a node with a given name
+    // list<Graph_Node>::iterator search_node(string val_name)
+    // {
+    //     list<Graph_Node>::iterator listIt;
+    //     for(listIt=Pres_Graph.begin();listIt!=Pres_Graph.end();listIt++)
+    //     {
+    //         if(listIt->get_name().compare(val_name)==0)
+    //             return listIt;
+    //     }
     
-       if (n>=Pres_Graph.size()){cerr<<"index out of range\n";}
-		Pres_Graph[n] = node ; 
-        
-        
-            
-    }
-
-
+    //         cout<<"node not found\n";
+    //     return listIt;
+    // }
 
     void set_markov_blanket(){
         for (int i = 0; i > Pres_Graph.size(); i++){
@@ -182,6 +180,10 @@ public:
             }
             node.markov_blanket = markov_blanket_vector;
         }
+    }
+
+    void set_nth_node(int n, Graph_Node node){
+        Pres_Graph[n] = node;
     }
 
 
@@ -215,34 +217,33 @@ float calc_change(network& before, network& after) {
 
 
 class Dataset {
-private:
+public:
     // Data matrix: Each row represents a patient record
     // If an entry is -1, it denotes a missing value ('?')
     vector<vector<int>> data_matrix;
 
     // Reverse map for converting back from integers to values
-    vector<vector<string>> value_list;
+    // vector<vector<string>> value_list;
     vector<unordered_map<string, int>> variable_value_map;   
 
     // Store the lines and positions of question marks.
     // E.g. If question mark is in line 3 at position 2, we store it as {3, 2}
     vector<pair<int, int>> missing_values_positions;
 
-public:
     // Constructor
     vector<vector<vector<int>>> counts; // counts[i][k][j] is the number of times variable i  with parents taking kth configuration takes value j
     Dataset() {}
 
     void set_variable_value_map(network& Alarm) {
         for (int i = 0; i < Alarm.netSize(); ++i) {
-            Graph_Node node = Alarm.get_nth_node(i);
+            Graph_Node node = Alarm.Pres_Graph[i];
             vector<string> values = node.get_values();
             unordered_map<string, int> value_map;
             for (int j = 0; j < values.size(); ++j) {
                 value_map[values[j]] = j;
             }
             variable_value_map.push_back(value_map);
-            value_list.push_back(values);
+            // value_list.push_back(values);
         }
     }   
 
@@ -250,16 +251,26 @@ public:
     void add_record(const vector<string>& record) {
         vector<int> int_record;
         for (int i = 0; i < record.size(); ++i) {
-            const string& value = record[i];
-            if (value == "?") {
+            string value = record[i];
+            if (value.substr(1,value.size()-2) == "?") {
+                // cout << "in ?????" << endl;
                 int_record.push_back(-1);
                 missing_values_positions.push_back({static_cast<int>(data_matrix.size()), i});
             } else {
                 if (i>= variable_value_map.size()){
                     variable_value_map.resize(i+1);
                 }
+				// cout << value << " hi2" << endl;
                 if (variable_value_map[i].find(value) == variable_value_map[i].end()) {
-                   cerr << "Error: Invalid value " << value << " for variable " << i << endl;
+                    // cout all keys of variable_value_map[i]
+                    // for (auto it = variable_value_map[i].begin(); it != variable_value_map[i].end(); it++){
+                    //     cout << it->first << endl;
+                    // }
+                    // cout << value << "hi" << endl;
+                    // cout << i << endl;
+
+					// ?? acc to me it should never enter this if  
+                   cout << "Error: Invalid value " << value << " for variable " << i << endl;
                 }
                 int_record.push_back(variable_value_map[i][value]);
             }
@@ -284,17 +295,20 @@ public:
             multiply_further *= possible_values[i];
         }
         for (int i = 0; i < possible_values.size(); ++i) {
-            multiply_further /= possible_values[i];
             config += parents_values[i]*multiply_further;
+            multiply_further /= possible_values[i];
+			// check above ??
         }
         return config;
     }
 
     void set_counts(network& Alarm) {
+		// counts.resize(Alarm.Pres_Graph.+1);
         for (int i = 0; i < data_matrix.size(); ++i) {
             vector<int> record = data_matrix[i];
-            for (int j = 0; j < record.size(); ++j) {
-                Graph_Node node = Alarm.get_nth_node(j);
+            for (int j = 0; j < record.size(); j++) {
+				cout <<"for record "<<i<<endl ; 
+                Graph_Node node = Alarm.Pres_Graph[j];
                 vector<int> parents_pos = node.get_Parents_index();
                 vector<int> parents_values;
                 // parents_values.push_back(record[j]);
@@ -302,9 +316,17 @@ public:
                 // possible_values.push_back(node.get_values().size());
                 for (int k = 0; k < parents_pos.size(); ++k) {
                     parents_values.push_back(record[parents_pos[k]]);
-                    possible_values.push_back(Alarm.get_nth_node(parents_pos[k]).get_values().size());
+					cout <<record[parents_pos[k]]<<" " ; 
+                    possible_values.push_back(Alarm.Pres_Graph[parents_pos[k]].get_values().size());
                 }
+				cout <<endl ; 
+
                 int pos = get_parent_config(possible_values,parents_values);
+				int multiply_further = 1;
+				for (int i = 0; i < possible_values.size(); ++i) {
+					multiply_further *= possible_values[i];
+				}
+				// counts.push_back(vector<vector<int>> (multiply_further, vector<int>(node.get_values().size() , 0)))  ;
                 if (j >= counts.size()) {
                     // increase the size of counts to j+1
                     counts.resize(j+1);
@@ -317,7 +339,17 @@ public:
                     // increase the size of counts[j][pos] to record[j]+1
                     counts[j][pos].resize(record[j]+1);
                 }
-                counts[j][pos][record[j]]++;
+				cout <<"increasing count of variable "<<j<<" with config "<<pos<<" and value "<<record[j]<<endl ; 
+				vector<int> x = parents_pos; 
+				cout <<"hello" ; 
+				// for (auto it  : x) cout <<it<<" " ; cout <<endl ;
+				cout << "start" << endl;
+                auto a = counts[j];
+				cout << 1 << endl ;
+				auto b = counts[j][pos];
+				cout << 2 << endl ;
+				counts[j][pos][record[j]]++;
+				cout << 34 << endl ;
 
             }
         }
@@ -325,34 +357,25 @@ public:
 
     // Other utility functions can be added as needed...
 	// check the below fucntion ?
-	void update_value(int row, int col, const string& value) {
-        if (row < data_matrix.size() && col < data_matrix[row].size()) {
-            if (value == "?") {
-                data_matrix[row][col] = -1;
-            } else {
-                if (variable_value_map[col].find(value) == variable_value_map[col].end()) {
-                    cerr << "Error: Invalid value " << value << " for variable " << col << endl;
-                }
-                data_matrix[row][col] = variable_value_map[col][value];
-            }
-        }
+	void update_value(int row, int col, int value) {
+		data_matrix[row][col] = value;
     }
 };
 
 
 vector<string> split_record(const string& line) {
     // Remove the first and last quote
-    string trimmed = line ; 
+    string trimmed = line;
 
     // Split the string by the delimiter '" "'
     vector<string> record;
     size_t start = 0;
-    size_t end = trimmed.find("\" \"");
+    size_t end = trimmed.find(" ");
     
     while (end != string::npos) {
         record.push_back(trimmed.substr(start, end - start));
-        start = end + 3; // move past the found delimiter
-        end = trimmed.find("\" \"", start);
+        start = end + 1; // move past the found delimiter
+        end = trimmed.find(" ", start);
     }
     
     // Push the last value after the last delimiter
@@ -405,7 +428,6 @@ network read_network()
      		{
                     
      				ss>>name;
-					name = name.substr(1, name.size()-2) ; 
      				getline (myfile,line);
                    
      				stringstream ss2;
@@ -425,6 +447,11 @@ network read_network()
      					ss2>>temp;
     				}
      				Graph_Node new_node(name,values.size(),values);
+                    // cout all values
+                    for (int i = 0; i < values.size(); ++i) {
+                        cout << values[i] << " ";
+                    }
+					cout<<endl ; 
      				int pos=Alarm.addNode(new_node);
 
      				
@@ -442,18 +469,30 @@ network read_network()
      				while(temp.compare(")")!=0)
      				{
                         pos1=Alarm.get_index(temp);
-                        Alarm.get_nth_node(pos1).add_child(index);
+						// cout << temp ;
+                        Alarm.Pres_Graph[pos1].add_child(index);
      					values.push_back(temp);
      					
      					ss>>temp;
 
     				}
                     vector<int> parents_pos;
+					// for (auto i : values) { cout << i << endl;}
+					cout << values.size() << endl ;
                     for (int i = 0; i < values.size(); ++i) {
                         parents_pos.push_back(Alarm.get_index(values[i]));
                     }
-                    Alarm.get_nth_node(index).set_Parents_index(parents_pos);
-                    Alarm.get_nth_node(index).set_Parents(values);
+                    Alarm.Pres_Graph[index].parents_pos = parents_pos;
+                    Alarm.Pres_Graph[index].Parents = values;
+
+					vector<int> x = Alarm.Pres_Graph[index].parents_pos ; 
+					vector<string> y = Alarm.Pres_Graph[index].Parents;
+					cout << "gdi" << endl ;
+					for (auto it  : x) cout <<it<<" " ; cout <<endl ;
+					cout<<"hiwdh"<<endl;
+					for (auto it : y) cout << it << " " ; cout << endl ;
+					cout <<"hello" ; 
+
     				getline (myfile,line);
      				stringstream ss2;
                     
@@ -475,17 +514,13 @@ network read_network()
 
     				}
                     
-                    Alarm.get_nth_node(index).set_CPT(curr_CPT);
+                    Alarm.Pres_Graph[index].set_CPT(curr_CPT);
 
      		}
             else
             {
                 
-            }
-     		
-     		
-
-    		
+            }	
     		
     	}
     	
@@ -497,7 +532,9 @@ network read_network()
 }
 
 
-// the following finction seems correct
+
+
+// functions used in int main: 
 void random_initialise_data(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
     const vector<pair<int, int>>& missing_positions = dataset2.get_missing_values_positions();
 
@@ -505,7 +542,7 @@ void random_initialise_data(Dataset& dataset1, Dataset& dataset2, network& Alarm
         int row = position.first;
         int col = position.second;
 
-        Graph_Node node = Alarm.get_nth_node(col);
+        Graph_Node node = Alarm.Pres_Graph[col];
         vector<string> possibleValues = node.get_values();
 
         // Randomly select a value from the possible values in dataset1
@@ -513,14 +550,14 @@ void random_initialise_data(Dataset& dataset1, Dataset& dataset2, network& Alarm
         string replacementValue = possibleValues[randomIndex];
 
         // Update the missing value in dataset2
-        dataset2.update_value(row, col, replacementValue);
+        dataset2.update_value(row, col, randomIndex);
     }
 }
 
 
-string sample_value(const vector<float>& probabilities) {
+int sample_value(const vector<float>& probabilities) {
     if (probabilities.size() == 0) {
-        return ""; // Empty probabilities, return an empty string
+        return -1; // Empty probabilities, return an empty string
     }
 
     // Create a random engine with a seed based on the current time
@@ -532,27 +569,46 @@ string sample_value(const vector<float>& probabilities) {
 
     // Sample a random value
     int sampledIndex = distribution(generator);
-    return to_string(sampledIndex); // Convert the index to a string
+    return sampledIndex; // Convert the index to a string
 }
 
 void evaluate_CPT(network& Alarm, Dataset& dataset) {
-    for (int i = 0; i < Alarm.netSize(); i++) {
-        Graph_Node node = Alarm.get_nth_node(i);
+    for (int i = 0; i < Alarm.netSize(); ++i) {
+        Graph_Node node = Alarm.Pres_Graph[i];
         vector<string> values = node.get_values();
+		string name = node.get_name();
+        // cout << "i " << i << endl ;
+        // cout << "size " << dataset.counts.size
         vector<vector<int>> counts = dataset.counts[i];
         vector<float> CPT(values.size()*counts.size(), 0.0);
         vector<int> parents_pos = node.get_Parents_index();
-        for (int j = 0; j < counts.size(); ++j) {
+		cout << 1 << endl ;
+        for (int j = 0; j < counts.size(); j++) {
+			cout << 2 << endl ;
             int sum = 0;
-            for (int k = 0; k < counts[j].size(); ++k) {
+            for (int k = 0; k < counts[j].size(); k++) {
+				cout << 3 << endl ;
                 sum += counts[j][k];
+				cout << 4 << endl ;
             }
-            for (int k = 0 ; k < values.size(); ++k) {
-                CPT[counts.size()*k + j] = (counts[j][k] + 1.0) / (sum + values.size());
+			cout << 5 << endl ;
+            for (int k = 0 ; k < values.size(); k++) {
+				// if (name == "\"StrokeVolume\""){
+				// 	cout << 
+				// }
+				cout << 6 << endl ;
+				cout << name << endl ;
+				cout << values.size() << endl ;
+				cout << counts.size() << endl ;
+				for (auto i : counts) { for (auto j : i){cout << j << " ";} cout << endl;}
+				cout << CPT.size() << endl;
+				cout << counts.size()*k + j << endl;
+                CPT[counts.size()*k + j] = (counts[j][k] + m) / (sum + m*values.size());
+				cout << 7 << endl;
             }
         }
         node.set_CPT(CPT);
-		Alarm.set_nth_node(i, node);
+        Alarm.set_nth_node(i, node);
     }
 }
 
@@ -570,23 +626,26 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
         }
 
         // Retrieve the node corresponding to the missing value
-        Graph_Node node = Alarm.get_nth_node(col);
+        Graph_Node node = Alarm.Pres_Graph[col];
         vector<float> CPT = node.get_CPT();
 
         // Sample a value based on the CPT
-        string sampledValue = sample_value(CPT);
+        int sampledValue = sample_value(CPT);
 
         // Update dataset2 with the sampled value
 
 		// the follwoing seems wrong ?? shouldnt we use update_value function ?
-        dataset2.get_record(row)[col] = stoi(sampledValue);
+        dataset2.update_value(row,col, sampledValue);
 
         missingCounter++;
 
         if (missingCounter % 40 == 0) {
+			dataset2.set_counts(Alarm);
             evaluate_CPT(Alarm, dataset2); // Update CPT table after sampling every 40 missing values
         }
     }
+	dataset2.set_counts(Alarm);
+	evaluate_CPT(Alarm, dataset2); 
 }
 
 
@@ -597,46 +656,54 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
 int main()
 {
 
-	// network Alarm;
-	// Alarm=read_network();
-	// float maxscore = -1 ; 
-	// int iterations = 100 ; 
-	// network best_Alarm = Alarm;
-	// Dataset dataset1  ; 
-	// read_data_file("records.dat", dataset1) ; 
-	// Dataset dataset2 = dataset1  ; 
+	network Alarm;
+	Alarm=read_network();
+	vector<int> x = Alarm.Pres_Graph[1].get_Parents_index() ; 
+		vector<string> y = Alarm.Pres_Graph[1].get_Parents();
+		cout <<"hello" ; 
+		for (auto it  : x) cout <<it<<" " ; cout <<endl ;
+		for (auto it : y) cout << it << " " ; cout << endl ;
+	// return 0;
+	float maxscore = -1 ; 
+	int iterations = 1 ; 
+	network best_Alarm = Alarm;
+	Dataset dataset1; 
+    dataset1.set_variable_value_map(Alarm);
+	read_data_file("records.dat", dataset1) ; 
+	Dataset dataset2 = dataset1  ; 
 
-	// while(iterations--){
-	// 	random_initialise_data(dataset1, dataset2, Alarm) ; 
-	// 	evaluate_CPT(Alarm, dataset2) ; 
-	// 	float epsilon = 0.005 ; 
-	// 	float delta = 1.0; 
-	// 	while(delta > epsilon){
-	// 		network before = Alarm ; 
-	// 		EM_step(dataset1, dataset2, Alarm) ; 
-	// 		delta = calc_change(before, Alarm) ; 
-	// 	}
-	// 	// float score = eval_score(Alarm) ; 
-	// 	// if (score > maxscore) best_Alarm = Alarm ; 
-    //     cout<<"iteration "<<iterations<<endl;
-    //     cout<<"delta "<<delta<<endl;
-    //     cout<< Alarm.get_nth_node(9).get_CPT()[5]<<endl;
-	// }
-
-	string temp = "\"hello\" \"?\" \"you\"" ; 
-	vector<string>x = split_record(temp); 
-	for(auto it : x)cout <<it<<" " ; 
-
-
-
-
-
-	
+	while(iterations--){
+		random_initialise_data(dataset1, dataset2, Alarm) ; 
+        dataset2.set_counts(Alarm);
+        cout << "done" << endl ;
+		evaluate_CPT(Alarm, dataset2) ;
+		cout<< "khatam bc" << endl; 
+		float epsilon = 0.001 ; 
+		float delta = 1.0; 
+		while(delta > epsilon){
+			network before = Alarm ; 
+			EM_step(dataset1, dataset2, Alarm) ; 
+			delta = calc_change(before, Alarm) ; 
+			cout <<delta<<endl ; 
+		}
+		// float score = eval_score(Alarm) ; 
+		// if (score > maxscore) best_Alarm = Alarm ; 
+        // cout<<"iteration "<<iterations<<endl;
+        // cout<<"delta "<<delta<<endl;
+		// cout << Alarm.Pres_Graph[1).get_name() <<endl; 
+		// cout <<"matrix printing sadc"<<endl ; 
+		vector<int> x = Alarm.Pres_Graph[1].get_Parents_index() ; 
+		vector<string> y = Alarm.Pres_Graph[1].get_Parents();
+		cout <<"hello" ; 
+		for (auto it  : x) cout <<it<<" " ; cout <<endl ;
+		for (auto it : y) cout << it << " " ; cout << endl ;
+ 		cout <<"hello" ; 
+		for(int i = 0 ; i < dataset2.counts[1].size() ; i++){
+			for(int j = 0 ; j < dataset2.counts[1][i].size() ; j++) cout <<dataset2.counts[1][i][j]<<" " ; 
+			cout <<endl ; 
+		}
+		// // cout <<endl ; 
+		// cout <<"hello" <<endl ; 
+        // for(int i = 0 ; i < Alarm.Pres_Graph[1).get_CPT().size(); i++) cout<< Alarm.Pres_Graph[1).get_CPT()[i]<<" ";
+	}
 }
-
-
-// dnkk
-
-
-
-
