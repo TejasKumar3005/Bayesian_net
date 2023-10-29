@@ -4,6 +4,7 @@
 #include <list>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 #include <cstdlib>
 
 
@@ -142,6 +143,107 @@ public:
 	
 
 };
+
+class Dataset {
+private:
+    // Data matrix: Each row represents a patient record
+    // If an entry is -1, it denotes a missing value ('?')
+    vector<vector<int>> data_matrix;
+
+    // Map a value (e.g., "True") to an integer (e.g., 0) for fast retrieval
+    unordered_map<string, int> value_map;
+
+    // Reverse map for converting back from integers to values
+    vector<string> value_list;
+
+    // Store the lines and positions of question marks.
+    // E.g. If question mark is in line 3 at position 2, we store it as {3, 2}
+    vector<pair<int, int>> missing_values_positions;
+
+public:
+    // Constructor
+    Dataset() {}
+
+    // Add a new patient record
+    void add_record(const vector<string>& record) {
+        vector<int> int_record;
+        for (int i = 0; i < record.size(); ++i) {
+            const string& value = record[i];
+            if (value == "?") {
+                int_record.push_back(-1);
+                missing_values_positions.push_back({static_cast<int>(data_matrix.size()), i});
+            } else {
+                if (value_map.find(value) == value_map.end()) {
+                    value_map[value] = value_list.size();
+                    value_list.push_back(value);
+                }
+                int_record.push_back(value_map[value]);
+            }
+        }
+        data_matrix.push_back(int_record);
+    }
+
+    // Retrieve a specific patient record
+    vector<string> get_record(int index) const {
+        const vector<int>& int_record = data_matrix[index];
+        vector<string> record;
+        for (int value : int_record) {
+            if (value == -1) {
+                record.push_back("?");
+            } else {
+                record.push_back(value_list[value]);
+            }
+        }
+        return record;
+    }
+
+    // Retrieve the positions of all missing values
+    const vector<pair<int, int>>& get_missing_values_positions() const {
+        return missing_values_positions;
+    }
+
+    // Other utility functions can be added as needed...
+};
+
+
+vector<string> split_record(const string& line) {
+    // Remove the first and last quote
+    string trimmed = line.substr(1, line.size() - 2);
+
+    // Split the string by the delimiter '" "'
+    vector<string> record;
+    size_t start = 0;
+    size_t end = trimmed.find("\" \"");
+    
+    while (end != string::npos) {
+        record.push_back(trimmed.substr(start, end - start));
+        start = end + 3; // move past the found delimiter
+        end = trimmed.find("\" \"", start);
+    }
+    
+    // Push the last value after the last delimiter
+    record.push_back(trimmed.substr(start));
+    
+    return record;
+}
+
+void read_data_file(const string& filename, Dataset& dataset) {
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cerr << "Failed to open file: " << filename << endl;
+        return;
+    }
+
+    string line;
+    while (getline(file, line)) {
+        vector<string> record = split_record(line);
+        dataset.add_record(record);
+    }
+
+    file.close();
+}
+
+
 
 network read_network()
 {
