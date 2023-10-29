@@ -30,6 +30,10 @@ private:
 public:
     vector<int> markov_blanket; // Markov blanket of a node- index of nodes in graph
 	// Constructor- a node is initialised with its name and its categories
+
+
+	// dont store markov blanket 
+	// also store counts and total counts
     Graph_Node(string name,int n,vector<string> vals)
 	{
 		Node_Name=name;

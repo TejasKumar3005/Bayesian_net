@@ -566,14 +566,11 @@ int main()
 		if (score > maxscore) best_Alarm = Alarm ; 
 	}
 
-
-
-
 	
 }
 
 
-// dnkk
+
 
 
 
