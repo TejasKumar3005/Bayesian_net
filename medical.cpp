@@ -142,19 +142,17 @@ public:
         
             
     }
-    //get the iterator of a node with a given name
-    // list<Graph_Node>::iterator search_node(string val_name)
-    // {
-    //     list<Graph_Node>::iterator listIt;
-    //     for(listIt=Pres_Graph.begin();listIt!=Pres_Graph.end();listIt++)
-    //     {
-    //         if(listIt->get_name().compare(val_name)==0)
-    //             return listIt;
-    //     }
+    void set_nth_node(int n, Graph_Node node)
+    {
     
-    //         cout<<"node not found\n";
-    //     return listIt;
-    // }
+       if (n>=Pres_Graph.size()){cerr<<"index out of range\n";}
+		Pres_Graph[n] = node ; 
+        
+        
+            
+    }
+
+
 
     void set_markov_blanket(){
         for (int i = 0; i > Pres_Graph.size(); i++){
@@ -344,7 +342,7 @@ public:
 
 vector<string> split_record(const string& line) {
     // Remove the first and last quote
-    string trimmed = line.substr(1, line.size() - 2);
+    string trimmed = line ; 
 
     // Split the string by the delimiter '" "'
     vector<string> record;
@@ -407,6 +405,7 @@ network read_network()
      		{
                     
      				ss>>name;
+					name = name.substr(1, name.size()-2) ; 
      				getline (myfile,line);
                    
      				stringstream ss2;
@@ -498,9 +497,7 @@ network read_network()
 }
 
 
-
-
-// functions used in int main: 
+// the following finction seems correct
 void random_initialise_data(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
     const vector<pair<int, int>>& missing_positions = dataset2.get_missing_values_positions();
 
@@ -539,7 +536,7 @@ string sample_value(const vector<float>& probabilities) {
 }
 
 void evaluate_CPT(network& Alarm, Dataset& dataset) {
-    for (int i = 0; i < Alarm.netSize(); ++i) {
+    for (int i = 0; i < Alarm.netSize(); i++) {
         Graph_Node node = Alarm.get_nth_node(i);
         vector<string> values = node.get_values();
         vector<vector<int>> counts = dataset.counts[i];
@@ -555,6 +552,7 @@ void evaluate_CPT(network& Alarm, Dataset& dataset) {
             }
         }
         node.set_CPT(CPT);
+		Alarm.set_nth_node(i, node);
     }
 }
 
@@ -598,55 +596,37 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
 
 int main()
 {
-    
-// Example: to do something
 
-	// 1. initialise CPT values to something(preferably using the dataset) 
-	// 2. find the probabilities of ? to be 1 or 0 and then make new dataset
-	// 3. calculate new CPT(dont forget smoothing) using this dataset and then delete this dataset
-	// 4. repeat step 2, 3 until the max difference in all the CPT values is less than epsilon
-	// 5. write the CPT values in the required file 
+	// network Alarm;
+	// Alarm=read_network();
+	// float maxscore = -1 ; 
+	// int iterations = 100 ; 
+	// network best_Alarm = Alarm;
+	// Dataset dataset1  ; 
+	// read_data_file("records.dat", dataset1) ; 
+	// Dataset dataset2 = dataset1  ; 
 
-
-	// CPT_initialise() ; 
-	// double epsilon = 0.05 ; 
-	// // store old CPT
-	// while (true){
-	// 	estimate_dataset() ; 
-	// 	maximise_CPT() 
-	// 	// double new_max_CPT_change = max change in new and old CPT values
-	// 	if (new_max_CPT_change<= epsilon) break ; 
+	// while(iterations--){
+	// 	random_initialise_data(dataset1, dataset2, Alarm) ; 
+	// 	evaluate_CPT(Alarm, dataset2) ; 
+	// 	float epsilon = 0.005 ; 
+	// 	float delta = 1.0; 
+	// 	while(delta > epsilon){
+	// 		network before = Alarm ; 
+	// 		EM_step(dataset1, dataset2, Alarm) ; 
+	// 		delta = calc_change(before, Alarm) ; 
+	// 	}
+	// 	// float score = eval_score(Alarm) ; 
+	// 	// if (score > maxscore) best_Alarm = Alarm ; 
+    //     cout<<"iteration "<<iterations<<endl;
+    //     cout<<"delta "<<delta<<endl;
+    //     cout<< Alarm.get_nth_node(9).get_CPT()[5]<<endl;
 	// }
-	// write_output() ; 
 
-	// cout<<"Perfect! Hurrah! \n";
+	string temp = "\"hello\" \"?\" \"you\"" ; 
+	vector<string>x = split_record(temp); 
+	for(auto it : x)cout <<it<<" " ; 
 
-
-	network Alarm;
-	Alarm=read_network();
-	float maxscore = -1 ; 
-	int iterations = 100 ; 
-	network best_Alarm = Alarm;
-	Dataset dataset1  ; 
-	read_data_file("records.dat", dataset1) ; 
-	Dataset dataset2 = dataset1  ; 
-
-	while(iterations--){
-		random_initialise_data(dataset1, dataset2, Alarm) ; 
-		evaluate_CPT(Alarm, dataset2) ; 
-		float epsilon = 0.005 ; 
-		float delta = 1.0; 
-		while(delta > epsilon){
-			network before = Alarm ; 
-			EM_step(dataset1, dataset2, Alarm) ; 
-			delta = calc_change(before, Alarm) ; 
-		}
-		// float score = eval_score(Alarm) ; 
-		// if (score > maxscore) best_Alarm = Alarm ; 
-        cout<<"iteration "<<iterations<<endl;
-        cout<<"delta "<<delta<<endl;
-        cout<< Alarm.get_nth_node(9).get_CPT()[5]<<endl;
-	}
 
 
 
