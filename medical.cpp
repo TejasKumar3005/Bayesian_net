@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <cstdlib>
 
 
@@ -23,6 +24,7 @@ private:
 	vector<float> CPT; // conditional probability table as a 1-d array . Look for BIF format to understand its meaning
 
 public:
+    vector<int> markov_blanket; // Markov blanket of a node- index of nodes in graph
 	// Constructor- a node is initialised with its name and its categories
     Graph_Node(string name,int n,vector<string> vals)
 	{
@@ -87,7 +89,7 @@ public:
  // The whole network represted as a list of nodes
 class network{
 
-	list <Graph_Node> Pres_Graph;
+	vector <Graph_Node> Pres_Graph;
 
 public:
 	int addNode(Graph_Node node)
@@ -104,41 +106,63 @@ public:
     // get the index of node with a given name
     int get_index(string val_name)
     {
-        list<Graph_Node>::iterator listIt;
-        int count=0;
-        for(listIt=Pres_Graph.begin();listIt!=Pres_Graph.end();listIt++)
+        for(int i=0;i<Pres_Graph.size();i++)
         {
-            if(listIt->get_name().compare(val_name)==0)
-                return count;
-            count++;
+            if(Pres_Graph[i].get_name().compare(val_name)==0)
+                return i;
         }
         return -1;
     }
 // get the node at nth index
-    list<Graph_Node>::iterator get_nth_node(int n)
+    Graph_Node get_nth_node(int n)
     {
-       list<Graph_Node>::iterator listIt;
-        int count=0;
-        for(listIt=Pres_Graph.begin();listIt!=Pres_Graph.end();listIt++)
-        {
-            if(count==n)
-                return listIt;
-            count++;
-        }
-        return listIt; 
+       if (n<Pres_Graph.size())
+           return Pres_Graph[n];
+        else
+            cout<<"index out of range\n";
     }
     //get the iterator of a node with a given name
-    list<Graph_Node>::iterator search_node(string val_name)
-    {
-        list<Graph_Node>::iterator listIt;
-        for(listIt=Pres_Graph.begin();listIt!=Pres_Graph.end();listIt++)
-        {
-            if(listIt->get_name().compare(val_name)==0)
-                return listIt;
-        }
+    // list<Graph_Node>::iterator search_node(string val_name)
+    // {
+    //     list<Graph_Node>::iterator listIt;
+    //     for(listIt=Pres_Graph.begin();listIt!=Pres_Graph.end();listIt++)
+    //     {
+    //         if(listIt->get_name().compare(val_name)==0)
+    //             return listIt;
+    //     }
     
-            cout<<"node not found\n";
-        return listIt;
+    //         cout<<"node not found\n";
+    //     return listIt;
+    // }
+
+    void set_markov_blanket(){
+        for (int i = 0; i > Pres_Graph.size(); i++){
+            Graph_Node node = Pres_Graph[i];
+            vector<int> children = node.get_children();
+            vector<string> parents = node.get_Parents();
+            unordered_set <int> markov_blanket;
+            for (int j = 0; j < children.size(); j++){
+                markov_blanket.insert(children[j]);
+            }
+            for (int j = 0; j < parents.size(); j++){
+                markov_blanket.insert(this->get_index(parents[j]));
+            }
+            // maybe duplicates in the below code, maybe set markov blanket as a set to avoid duplicates and at the end convert it to a vector again to keep in line with the format 
+             
+            for (int j = 0; j < children.size(); j++){
+                Graph_Node child = Pres_Graph[children[j]];
+                vector<string> child_parents = child.get_Parents();
+                for (int k = 0; k < child_parents.size(); k++){
+                    markov_blanket.insert(this->get_index(child_parents[k]));
+                }
+            }
+
+            vector<int> markov_blanket_vector;
+            for (auto it = markov_blanket.begin(); it != markov_blanket.end(); it++){
+                markov_blanket_vector.push_back(*it);
+            }
+            node.markov_blanket = markov_blanket_vector;
+        }
     }
 	
 
@@ -300,22 +324,20 @@ network read_network()
      				ss>>temp;
      				ss>>temp;
      				
-                    list<Graph_Node>::iterator listIt;
-                    list<Graph_Node>::iterator listIt1;
-     				listIt=Alarm.search_node(temp);
+                    int pos1;
                     int index=Alarm.get_index(temp);
                     ss>>temp;
                     values.clear();
      				while(temp.compare(")")!=0)
      				{
-                        listIt1=Alarm.search_node(temp);
-                        listIt1->add_child(index);
+                        pos1=Alarm.get_index(temp);
+                        Alarm.get_nth_node(pos1).add_child(index);
      					values.push_back(temp);
      					
      					ss>>temp;
 
     				}
-                    listIt->set_Parents(values);
+                    Alarm.get_nth_node(index).set_Parents(values);
     				getline (myfile,line);
      				stringstream ss2;
                     
@@ -337,8 +359,7 @@ network read_network()
 
     				}
                     
-                    listIt->set_CPT(curr_CPT);
-
+                    Alarm.get_nth_node(index).set_CPT(curr_CPT);
 
      		}
             else
@@ -374,16 +395,16 @@ int main()
 	// 5. write the CPT values in the required file 
 
 
-	CPT_initialise() ; 
-	double epsilon = 0.05 ; 
-	// store old CPT
-	while (true){
-		estimate_dataset() ; 
-		maximise_CPT() 
-		// double new_max_CPT_change = max change in new and old CPT values
-		if (new_max_CPT_change<= epsilon) break ; 
-	}
-	write_output() ; 
+	// CPT_initialise() ; 
+	// double epsilon = 0.05 ; 
+	// // store old CPT
+	// while (true){
+	// 	estimate_dataset() ; 
+	// 	maximise_CPT() 
+	// 	// double new_max_CPT_change = max change in new and old CPT values
+	// 	if (new_max_CPT_change<= epsilon) break ; 
+	// }
+	// write_output() ; 
 
 	// cout<<"Perfect! Hurrah! \n";
 	
