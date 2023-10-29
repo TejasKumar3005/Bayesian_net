@@ -7,19 +7,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <cstdlib>
-// #include <iostream>
-// #include <string>
-// #include <vector>
-// #include <list>
-// #include <fstream>
-// #include <sstream>
-// #include <cstdlib>
 #include <random>
 #include <chrono>
 #include <algorithm>
-// #include <iostream>
-// #include <fstream>
-// #include <vector>
 #include <ctime>
 
 
@@ -216,11 +206,9 @@ private:
     // If an entry is -1, it denotes a missing value ('?')
     vector<vector<int>> data_matrix;
 
-    // Map a value (e.g., "True") to an integer (e.g., 0) for fast retrieval
-    unordered_map<string, int> value_map;
-
     // Reverse map for converting back from integers to values
-    vector<string> value_list;
+    vector<vector<string>> value_list;
+    vector<unordered_map<string, int>> variable_value_map;   
 
     // Store the lines and positions of question marks.
     // E.g. If question mark is in line 3 at position 2, we store it as {3, 2}
@@ -229,6 +217,19 @@ private:
 public:
     // Constructor
     Dataset() {}
+
+    void set_variable_value_map(network& Alarm) {
+        for (int i = 0; i < Alarm.netSize(); ++i) {
+            Graph_Node& node = Alarm.get_nth_node(i);
+            vector<string>& values = node.get_values();
+            unordered_map<string, int> value_map;
+            for (int j = 0; j < values.size(); ++j) {
+                value_map[values[j]] = j;
+            }
+            variable_value_map.push_back(value_map);
+            value_list.push_back(values);
+        }
+    }   
 
     // Add a new patient record
     void add_record(const vector<string>& record) {
@@ -239,28 +240,18 @@ public:
                 int_record.push_back(-1);
                 missing_values_positions.push_back({static_cast<int>(data_matrix.size()), i});
             } else {
-                if (value_map.find(value) == value_map.end()) {
-                    value_map[value] = value_list.size();
-                    value_list.push_back(value);
+                if (variable_value_map[i].find(value) == variable_value_map[i].end()) {
+                   cerr << "Error: Invalid value " << value << " for variable " << i << endl;
                 }
-                int_record.push_back(value_map[value]);
+                int_record.push_back(variable_value_map[i][value]);
             }
         }
         data_matrix.push_back(int_record);
     }
 
     // Retrieve a specific patient record
-    vector<string> get_record(int index) const {
-        const vector<int>& int_record = data_matrix[index];
-        vector<string> record;
-        for (int value : int_record) {
-            if (value == -1) {
-                record.push_back("?");
-            } else {
-                record.push_back(value_list[value]);
-            }
-        }
-        return record;
+    vector<int> get_record(int index) const {
+        return data_matrix[index];
     }
 
     // Retrieve the positions of all missing values
@@ -275,11 +266,10 @@ public:
             if (value == "?") {
                 data_matrix[row][col] = -1;
             } else {
-                if (value_map.find(value) == value_map.end()) {
-                    value_map[value] = value_list.size();
-                    value_list.push_back(value);
+                if (variable_value_map[col].find(value) == variable_value_map[col].end()) {
+                    cerr << "Error: Invalid value " << value << " for variable " << col << endl;
                 }
-                data_matrix[row][col] = value_map[value];
+                data_matrix[row][col] = variable_value_map[col][value];
             }
         }
     }
@@ -500,7 +490,7 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
         // Update dataset2 with the sampled value
 
 		// the follwoing seems wrong ?? shouldnt we use update_value function ?
-        dataset2.get_record(row)[col] = node.get_values()[stoi(sampledValue)];
+        dataset2.get_record(row)[col] = stoi(sampledValue);
 
         missingCounter++;
 
