@@ -23,6 +23,7 @@ private:
 	string Node_Name;  // Variable name 
 	vector<int> Children; // Children of a particular node - these are index of nodes in graph.
 	vector<string> Parents; // Parents of a particular node- note these are names of parents
+    vector<int> parents_pos; // index of parents in graph
 	int nvalues;  // Number of categories a variable represented by this node can take
 	vector<string> values; // Categories of possible values
 	vector<float> CPT; // conditional probability table as a 1-d array . Look for BIF format to understand its meaning
@@ -68,6 +69,15 @@ public:
 		CPT.clear();
 		CPT=new_CPT;
 	}
+    void set_Parents_index(vector<int> Parent_Nodes)
+    {
+        parents_pos.clear();
+        parents_pos=Parent_Nodes;
+    }
+    vector<int> get_Parents_index()
+    {
+        return parents_pos;
+    }
     void set_Parents(vector<string> Parent_Nodes)
     {
         Parents.clear();
@@ -209,6 +219,7 @@ private:
     // Reverse map for converting back from integers to values
     vector<vector<string>> value_list;
     vector<unordered_map<string, int>> variable_value_map;   
+    vector<vector<vector<int>>> counts; // counts[i][k][j] is the number of times variable i  with parents taking kth configuration takes value j
 
     // Store the lines and positions of question marks.
     // E.g. If question mark is in line 3 at position 2, we store it as {3, 2}
@@ -257,6 +268,52 @@ public:
     // Retrieve the positions of all missing values
     const vector<pair<int, int>>& get_missing_values_positions() const {
         return missing_values_positions;
+    }
+
+    int get_parent_config(vector<int> possible_values, vector<int> parents_values) {
+        int config = 0;
+        int multiply_further = 1;
+        for (int i = 0; i < possible_values.size(); ++i) {
+            multiply_further *= possible_values[i];
+        }
+        for (int i = 0; i < possible_values.size(); ++i) {
+            multiply_further /= possible_values[i];
+            config += parents_values[i]*multiply_further;
+        }
+        return config;
+    }
+
+    void set_counts(network& Alarm) {
+        for (int i = 0; i < data_matrix.size(); ++i) {
+            vector<int> record = data_matrix[i];
+            for (int j = 0; j < record.size(); ++j) {
+                Graph_Node& node = Alarm.get_nth_node(j);
+                vector<int> parents_pos = node.get_Parents_index();
+                vector<int> parents_values;
+                // parents_values.push_back(record[j]);
+                vector<int> possible_values;
+                // possible_values.push_back(node.get_values().size());
+                for (int k = 0; k < parents_pos.size(); ++k) {
+                    parents_values.push_back(record[parents_pos[k]]);
+                    possible_values.push_back(Alarm.get_nth_node(parents_pos[k]).get_values().size());
+                }
+                int pos = get_parent_config(possible_values,parents_values);
+                if (j >= counts.size()) {
+                    // increase the size of counts to j+1
+                    counts.resize(j+1);
+                }
+                if (pos >= counts[j].size()) {
+                    // increase the size of counts[j] to pos+1
+                    counts[j].resize(pos+1);
+                }
+                if (record[j] >= counts[j][pos].size()) {
+                    // increase the size of counts[j][pos] to record[j]+1
+                    counts[j][pos].resize(record[j]+1);
+                }
+                counts[j][pos][record[j]]++;
+
+            }
+        }
     }
 
     // Other utility functions can be added as needed...
@@ -383,6 +440,11 @@ network read_network()
      					ss>>temp;
 
     				}
+                    vector<int> parents_pos;
+                    for (int i = 0; i < values.size(); ++i) {
+                        parents_pos.push_back(Alarm.get_index(values[i]));
+                    }
+                    Alarm.get_nth_node(index).set_Parents_index(parents_pos);
                     Alarm.get_nth_node(index).set_Parents(values);
     				getline (myfile,line);
      				stringstream ss2;
@@ -465,6 +527,20 @@ string sample_value(const vector<float>& probabilities) {
     // Sample a random value
     int sampledIndex = distribution(generator);
     return to_string(sampledIndex); // Convert the index to a string
+}
+
+void evaluate_CPT(network& Alarm, Dataset& dataset) {
+    for (int i = 0; i < Alarm.netSize(); ++i) {
+        Graph_Node& node = Alarm.get_nth_node(i);
+        vector<int> markov_blanket = node.markov_blanket;
+        vector<string> values = node.get_values();
+        vector<float> CPT(values.size(), 0.0);
+
+
+
+        // Update the CPT table
+        node.set_CPT(CPT);
+    }
 }
 
 
