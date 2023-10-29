@@ -102,11 +102,11 @@ public:
 
  // The whole network represted as a list of nodes
 class network{
-	friend float calc_change(network& before, network& after); // Declare calc_change as a friend
+	// friend float calc_change(network& before, network& after); // Declare calc_change as a friend
 
-	vector <Graph_Node> Pres_Graph;
 
 public:
+	vector <Graph_Node> Pres_Graph;
 	int addNode(Graph_Node node)
 	{
 		Pres_Graph.push_back(node);
@@ -131,10 +131,12 @@ public:
 // get the node at nth index
     Graph_Node get_nth_node(int n)
     {
-       if (n<Pres_Graph.size())
-           return Pres_Graph[n];
-        else
-            cout<<"index out of range\n";
+    
+       if (n>=Pres_Graph.size()){cerr<<"index out of range\n";}
+        
+        return Pres_Graph[n];
+        
+            
     }
     //get the iterator of a node with a given name
     // list<Graph_Node>::iterator search_node(string val_name)
@@ -180,33 +182,33 @@ public:
         }
     }
 
-	
-	float calc_change(network& before, network& after) {
-		float maxChange = 0.0;
-
-		Graph_Node* beforeNode;
-		Graph_Node* afterNode;
-
-		for (int index = 0 ; index < Pres_Graph.size() ; index++) {
-			Graph_Node beforeNode = before.get_nth_node(index) ; 
-			Graph_Node afterNode = after.get_nth_node(index) ; 
-			vector<float> beforeCPT = beforeNode.get_CPT();
-			vector<float> afterCPT = afterNode.get_CPT();
-
-			// Calculate the maximum change in CPT values for this node
-			for (int i = 0; i < beforeCPT.size(); i++) {
-				float change = abs(beforeCPT[i] - afterCPT[i]);
-				if (change > maxChange) {
-					maxChange = change;
-				}
-			}
-		}
-
-		return maxChange;
-	}
 
 
 };
+	
+float calc_change(network& before, network& after) {
+    float maxChange = 0.0;
+
+    Graph_Node* beforeNode;
+    Graph_Node* afterNode;
+
+    for (int index = 0 ; index < before.Pres_Graph.size() ; index++) {
+        Graph_Node beforeNode = before.get_nth_node(index) ; 
+        Graph_Node afterNode = after.get_nth_node(index) ; 
+        vector<float> beforeCPT = beforeNode.get_CPT();
+        vector<float> afterCPT = afterNode.get_CPT();
+
+        // Calculate the maximum change in CPT values for this node
+        for (int i = 0; i < beforeCPT.size(); i++) {
+            float change = abs(beforeCPT[i] - afterCPT[i]);
+            if (change > maxChange) {
+                maxChange = change;
+            }
+        }
+    }
+
+    return maxChange;
+	}
 
 
 
@@ -219,7 +221,6 @@ private:
     // Reverse map for converting back from integers to values
     vector<vector<string>> value_list;
     vector<unordered_map<string, int>> variable_value_map;   
-    vector<vector<vector<int>>> counts; // counts[i][k][j] is the number of times variable i  with parents taking kth configuration takes value j
 
     // Store the lines and positions of question marks.
     // E.g. If question mark is in line 3 at position 2, we store it as {3, 2}
@@ -227,12 +228,13 @@ private:
 
 public:
     // Constructor
+    vector<vector<vector<int>>> counts; // counts[i][k][j] is the number of times variable i  with parents taking kth configuration takes value j
     Dataset() {}
 
     void set_variable_value_map(network& Alarm) {
         for (int i = 0; i < Alarm.netSize(); ++i) {
-            Graph_Node& node = Alarm.get_nth_node(i);
-            vector<string>& values = node.get_values();
+            Graph_Node node = Alarm.get_nth_node(i);
+            vector<string> values = node.get_values();
             unordered_map<string, int> value_map;
             for (int j = 0; j < values.size(); ++j) {
                 value_map[values[j]] = j;
@@ -251,6 +253,9 @@ public:
                 int_record.push_back(-1);
                 missing_values_positions.push_back({static_cast<int>(data_matrix.size()), i});
             } else {
+                if (i>= variable_value_map.size()){
+                    variable_value_map.resize(i+1);
+                }
                 if (variable_value_map[i].find(value) == variable_value_map[i].end()) {
                    cerr << "Error: Invalid value " << value << " for variable " << i << endl;
                 }
@@ -287,7 +292,7 @@ public:
         for (int i = 0; i < data_matrix.size(); ++i) {
             vector<int> record = data_matrix[i];
             for (int j = 0; j < record.size(); ++j) {
-                Graph_Node& node = Alarm.get_nth_node(j);
+                Graph_Node node = Alarm.get_nth_node(j);
                 vector<int> parents_pos = node.get_Parents_index();
                 vector<int> parents_values;
                 // parents_values.push_back(record[j]);
@@ -531,14 +536,20 @@ string sample_value(const vector<float>& probabilities) {
 
 void evaluate_CPT(network& Alarm, Dataset& dataset) {
     for (int i = 0; i < Alarm.netSize(); ++i) {
-        Graph_Node& node = Alarm.get_nth_node(i);
-        vector<int> markov_blanket = node.markov_blanket;
+        Graph_Node node = Alarm.get_nth_node(i);
         vector<string> values = node.get_values();
-        vector<float> CPT(values.size(), 0.0);
-
-
-
-        // Update the CPT table
+        vector<vector<int>> counts = dataset.counts[i];
+        vector<float> CPT(values.size()*counts.size(), 0.0);
+        vector<int> parents_pos = node.get_Parents_index();
+        for (int j = 0; j < counts.size(); ++j) {
+            int sum = 0;
+            for (int k = 0; k < counts[j].size(); ++k) {
+                sum += counts[j][k];
+            }
+            for (int k = 0 ; k < values.size(); ++k) {
+                CPT[counts.size()*k + j] = (counts[j][k] + 1.0) / (sum + values.size());
+            }
+        }
         node.set_CPT(CPT);
     }
 }
@@ -583,8 +594,6 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
 
 int main()
 {
-	network Alarm;
-	Alarm=read_network();
     
 // Example: to do something
 
@@ -617,19 +626,22 @@ int main()
 	Dataset dataset1  ; 
 	read_data_file("records.dat", dataset1) ; 
 	Dataset dataset2 = dataset1  ; 
-	float epsilon = 0.005 ; 
 
 	while(iterations--){
 		random_initialise_data(dataset1, dataset2, Alarm) ; 
 		evaluate_CPT(Alarm, dataset2) ; 
-		float delta = 1.0  ; 
+		float epsilon = 0.005 ; 
+		float delta = 1.0; 
 		while(delta > epsilon){
 			network before = Alarm ; 
 			EM_step(dataset1, dataset2, Alarm) ; 
 			delta = calc_change(before, Alarm) ; 
 		}
-		float score = eval_score(Alarm) ; 
-		if (score > maxscore) best_Alarm = Alarm ; 
+		// float score = eval_score(Alarm) ; 
+		// if (score > maxscore) best_Alarm = Alarm ; 
+        cout<<"iteration "<<iterations<<endl;
+        cout<<"delta "<<delta<<endl;
+        cout<< Alarm.get_nth_node(9).get_CPT()[5]<<endl;
 	}
 
 
