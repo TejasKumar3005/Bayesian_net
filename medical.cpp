@@ -551,11 +551,11 @@ int main()
 	Dataset dataset1  ; 
 	read_data_file("records.dat", dataset1) ; 
 	Dataset dataset2 = dataset1  ; 
+	float epsilon = 0.005 ; 
 
 	while(iterations--){
 		random_initialise_data(dataset1, dataset2, Alarm) ; 
 		evaluate_CPT(Alarm, dataset2) ; 
-		float epsilon = 0.005 ; 
 		float delta = 1.0  ; 
 		while(delta > epsilon){
 			network before = Alarm ; 
