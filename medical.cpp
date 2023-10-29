@@ -23,6 +23,7 @@ private:
 	string Node_Name;  // Variable name 
 	vector<int> Children; // Children of a particular node - these are index of nodes in graph.
 	vector<string> Parents; // Parents of a particular node- note these are names of parents
+    vector<int> parents_pos; // index of parents in graph
 	int nvalues;  // Number of categories a variable represented by this node can take
 	vector<string> values; // Categories of possible values
 	vector<float> CPT; // conditional probability table as a 1-d array . Look for BIF format to understand its meaning
@@ -72,6 +73,15 @@ public:
 		CPT.clear();
 		CPT=new_CPT;
 	}
+    void set_Parents_index(vector<int> Parent_Nodes)
+    {
+        parents_pos.clear();
+        parents_pos=Parent_Nodes;
+    }
+    vector<int> get_Parents_index()
+    {
+        return parents_pos;
+    }
     void set_Parents(vector<string> Parent_Nodes)
     {
         Parents.clear();
@@ -96,11 +106,11 @@ public:
 
  // The whole network represted as a list of nodes
 class network{
-	friend float calc_change(network& before, network& after); // Declare calc_change as a friend
+	// friend float calc_change(network& before, network& after); // Declare calc_change as a friend
 
-	vector <Graph_Node> Pres_Graph;
 
 public:
+	vector <Graph_Node> Pres_Graph;
 	int addNode(Graph_Node node)
 	{
 		Pres_Graph.push_back(node);
@@ -125,10 +135,12 @@ public:
 // get the node at nth index
     Graph_Node get_nth_node(int n)
     {
-       if (n<Pres_Graph.size())
-           return Pres_Graph[n];
-        else
-            cout<<"index out of range\n";
+    
+       if (n>=Pres_Graph.size()){cerr<<"index out of range\n";}
+        
+        return Pres_Graph[n];
+        
+            
     }
     //get the iterator of a node with a given name
     // list<Graph_Node>::iterator search_node(string val_name)
@@ -174,33 +186,33 @@ public:
         }
     }
 
-	
-	float calc_change(network& before, network& after) {
-		float maxChange = 0.0;
-
-		Graph_Node* beforeNode;
-		Graph_Node* afterNode;
-
-		for (int index = 0 ; index < Pres_Graph.size() ; index++) {
-			Graph_Node beforeNode = before.get_nth_node(index) ; 
-			Graph_Node afterNode = after.get_nth_node(index) ; 
-			vector<float> beforeCPT = beforeNode.get_CPT();
-			vector<float> afterCPT = afterNode.get_CPT();
-
-			// Calculate the maximum change in CPT values for this node
-			for (int i = 0; i < beforeCPT.size(); i++) {
-				float change = abs(beforeCPT[i] - afterCPT[i]);
-				if (change > maxChange) {
-					maxChange = change;
-				}
-			}
-		}
-
-		return maxChange;
-	}
 
 
 };
+	
+float calc_change(network& before, network& after) {
+    float maxChange = 0.0;
+
+    Graph_Node* beforeNode;
+    Graph_Node* afterNode;
+
+    for (int index = 0 ; index < before.Pres_Graph.size() ; index++) {
+        Graph_Node beforeNode = before.get_nth_node(index) ; 
+        Graph_Node afterNode = after.get_nth_node(index) ; 
+        vector<float> beforeCPT = beforeNode.get_CPT();
+        vector<float> afterCPT = afterNode.get_CPT();
+
+        // Calculate the maximum change in CPT values for this node
+        for (int i = 0; i < beforeCPT.size(); i++) {
+            float change = abs(beforeCPT[i] - afterCPT[i]);
+            if (change > maxChange) {
+                maxChange = change;
+            }
+        }
+    }
+
+    return maxChange;
+	}
 
 
 
@@ -220,12 +232,13 @@ private:
 
 public:
     // Constructor
+    vector<vector<vector<int>>> counts; // counts[i][k][j] is the number of times variable i  with parents taking kth configuration takes value j
     Dataset() {}
 
     void set_variable_value_map(network& Alarm) {
         for (int i = 0; i < Alarm.netSize(); ++i) {
-            Graph_Node& node = Alarm.get_nth_node(i);
-            vector<string>& values = node.get_values();
+            Graph_Node node = Alarm.get_nth_node(i);
+            vector<string> values = node.get_values();
             unordered_map<string, int> value_map;
             for (int j = 0; j < values.size(); ++j) {
                 value_map[values[j]] = j;
@@ -244,6 +257,9 @@ public:
                 int_record.push_back(-1);
                 missing_values_positions.push_back({static_cast<int>(data_matrix.size()), i});
             } else {
+                if (i>= variable_value_map.size()){
+                    variable_value_map.resize(i+1);
+                }
                 if (variable_value_map[i].find(value) == variable_value_map[i].end()) {
                    cerr << "Error: Invalid value " << value << " for variable " << i << endl;
                 }
@@ -261,6 +277,52 @@ public:
     // Retrieve the positions of all missing values
     const vector<pair<int, int>>& get_missing_values_positions() const {
         return missing_values_positions;
+    }
+
+    int get_parent_config(vector<int> possible_values, vector<int> parents_values) {
+        int config = 0;
+        int multiply_further = 1;
+        for (int i = 0; i < possible_values.size(); ++i) {
+            multiply_further *= possible_values[i];
+        }
+        for (int i = 0; i < possible_values.size(); ++i) {
+            multiply_further /= possible_values[i];
+            config += parents_values[i]*multiply_further;
+        }
+        return config;
+    }
+
+    void set_counts(network& Alarm) {
+        for (int i = 0; i < data_matrix.size(); ++i) {
+            vector<int> record = data_matrix[i];
+            for (int j = 0; j < record.size(); ++j) {
+                Graph_Node node = Alarm.get_nth_node(j);
+                vector<int> parents_pos = node.get_Parents_index();
+                vector<int> parents_values;
+                // parents_values.push_back(record[j]);
+                vector<int> possible_values;
+                // possible_values.push_back(node.get_values().size());
+                for (int k = 0; k < parents_pos.size(); ++k) {
+                    parents_values.push_back(record[parents_pos[k]]);
+                    possible_values.push_back(Alarm.get_nth_node(parents_pos[k]).get_values().size());
+                }
+                int pos = get_parent_config(possible_values,parents_values);
+                if (j >= counts.size()) {
+                    // increase the size of counts to j+1
+                    counts.resize(j+1);
+                }
+                if (pos >= counts[j].size()) {
+                    // increase the size of counts[j] to pos+1
+                    counts[j].resize(pos+1);
+                }
+                if (record[j] >= counts[j][pos].size()) {
+                    // increase the size of counts[j][pos] to record[j]+1
+                    counts[j][pos].resize(record[j]+1);
+                }
+                counts[j][pos][record[j]]++;
+
+            }
+        }
     }
 
     // Other utility functions can be added as needed...
@@ -387,6 +449,11 @@ network read_network()
      					ss>>temp;
 
     				}
+                    vector<int> parents_pos;
+                    for (int i = 0; i < values.size(); ++i) {
+                        parents_pos.push_back(Alarm.get_index(values[i]));
+                    }
+                    Alarm.get_nth_node(index).set_Parents_index(parents_pos);
                     Alarm.get_nth_node(index).set_Parents(values);
     				getline (myfile,line);
      				stringstream ss2;
@@ -471,6 +538,26 @@ string sample_value(const vector<float>& probabilities) {
     return to_string(sampledIndex); // Convert the index to a string
 }
 
+void evaluate_CPT(network& Alarm, Dataset& dataset) {
+    for (int i = 0; i < Alarm.netSize(); ++i) {
+        Graph_Node node = Alarm.get_nth_node(i);
+        vector<string> values = node.get_values();
+        vector<vector<int>> counts = dataset.counts[i];
+        vector<float> CPT(values.size()*counts.size(), 0.0);
+        vector<int> parents_pos = node.get_Parents_index();
+        for (int j = 0; j < counts.size(); ++j) {
+            int sum = 0;
+            for (int k = 0; k < counts[j].size(); ++k) {
+                sum += counts[j][k];
+            }
+            for (int k = 0 ; k < values.size(); ++k) {
+                CPT[counts.size()*k + j] = (counts[j][k] + 1.0) / (sum + values.size());
+            }
+        }
+        node.set_CPT(CPT);
+    }
+}
+
 
 void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
     int missingCounter = 0;
@@ -511,8 +598,6 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
 
 int main()
 {
-	network Alarm;
-	Alarm=read_network();
     
 // Example: to do something
 
@@ -545,19 +630,22 @@ int main()
 	Dataset dataset1  ; 
 	read_data_file("records.dat", dataset1) ; 
 	Dataset dataset2 = dataset1  ; 
-	float epsilon = 0.005 ; 
 
 	while(iterations--){
 		random_initialise_data(dataset1, dataset2, Alarm) ; 
 		evaluate_CPT(Alarm, dataset2) ; 
-		float delta = 1.0  ; 
+		float epsilon = 0.005 ; 
+		float delta = 1.0; 
 		while(delta > epsilon){
 			network before = Alarm ; 
 			EM_step(dataset1, dataset2, Alarm) ; 
 			delta = calc_change(before, Alarm) ; 
 		}
-		float score = eval_score(Alarm) ; 
-		if (score > maxscore) best_Alarm = Alarm ; 
+		// float score = eval_score(Alarm) ; 
+		// if (score > maxscore) best_Alarm = Alarm ; 
+        cout<<"iteration "<<iterations<<endl;
+        cout<<"delta "<<delta<<endl;
+        cout<< Alarm.get_nth_node(9).get_CPT()[5]<<endl;
 	}
 
 
