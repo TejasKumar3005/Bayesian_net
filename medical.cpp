@@ -658,7 +658,60 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
 }
 
 
+string write_probability_lines(Graph_Node node){
+    // first line probability (node_name | parents)
+    // second table CPT of node
+    // thrind line }
 
+    string line;
+    // line = "probability ( " + node.get_name() + " ";
+    // vector<string> parents = node.get_Parents();
+    // for (int i = 0; i < parents.size(); ++i) {
+    //     line += parents[i] + " ";
+    // }
+    // line += ") {\n";
+    line += "\ttable ";
+    vector<float> CPT = node.get_CPT();
+    for (int i = 0; i < CPT.size(); ++i) {
+        float num = round ( CPT[i]* 10000 ) / 10000.0;
+        line += to_string(num) + " ";
+    }
+    line += ";\n";
+    // line += "}\n";
+    return line;
+}
+
+void write_final_bif(network &Alarm, string outfile, string orgfile  ){
+    ofstream myfile;
+    myfile.open (outfile);
+    // copy lines of alarm.bif till the probability lines start
+    ifstream infile(orgfile);
+    string line;
+    int i = 0;
+    bool write_flag = false;
+    while (getline(infile, line))
+    {
+        // if first word probability then break
+        stringstream ss;
+        ss.str(line);
+        string temp;
+        ss>>temp;
+        if(!write_flag){myfile<<line<<endl;}
+        else{
+            myfile<<write_probability_lines(Alarm.Pres_Graph[i]);
+            i++;
+        }
+        if(temp.compare("probability")==0) {write_flag = true;}
+        else{
+            write_flag = false;
+        }
+    }
+    // write the probability lines
+    // for (int i = 0; i < Alarm.netSize(); ++i) {
+    //     Graph_Node node = Alarm.Pres_Graph[i];
+    //     myfile<<write_probability_lines(node);
+    // }
+}
 
 
 int main()
@@ -682,7 +735,7 @@ int main()
         cout << "done" << endl ;
 		evaluate_CPT(Alarm, dataset2) ;
 		cout<< "khatam bc" << endl; 
-		float epsilon = 0.005; 
+		float epsilon = 0.01; 
 		float delta = 1.0; 
         int blah = 0 ; 
 		while(delta > epsilon){
@@ -715,6 +768,7 @@ int main()
         // cout <<endl ;
         cout <<blah <<endl ; 
 	}
+    write_final_bif(Alarm, "solved_alarm.bif", "alarm.bif") ;
 
     network Goal = read_network("goal.bif") ; 
     print("Now we shall calculate score: "); nl ;
@@ -722,7 +776,9 @@ int main()
     float penalty = 0 ; 
     for(int i= 0; i<Alarm.Pres_Graph.size();i++){
         vector<float> cpt1= Alarm.Pres_Graph[i].get_CPT() ; 
+        for (float &num : cpt1) num = round(num*10000)/10000.0 ;
         vector<float> cpt2= Goal.Pres_Graph[i].get_CPT() ; 
+
         rep(j,0,cpt1.size()) penalty+= abs(cpt1[j] - cpt2[j] ) ; 
     }
     print(penalty) ; nl ; 
