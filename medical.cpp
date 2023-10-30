@@ -268,7 +268,7 @@ public:
                     }
                     cout << value << "hi" << endl;
                     cout << i << endl;
-                   cout << "Error: Invalid value " << value << " for variable " << i << endl;
+                    cout << "Error: Invalid value " << value << " for variable " << i << endl;
                 }
                 int_record.push_back(variable_value_map[i][value]);
             }
@@ -570,6 +570,42 @@ void evaluate_CPT(network& Alarm, Dataset& dataset) {
     }
 }
 
+int get_parent_config(vector<int> possible_values, vector<int> parents_values){
+    int config = 0;
+    int multiply_further = 1;
+    for (int i = 0; i < possible_values.size(); ++i) {
+        multiply_further *= possible_values[i];
+    }
+    for (int i = 0; i < possible_values.size(); ++i) {
+        multiply_further /= possible_values[i];
+        config += parents_values[i]*multiply_further;
+    }
+    return config;
+}
+
+float calc(int col, vector<int> record,network& Alarm){
+    float x = 1.0 ; 
+    Graph_Node node = Alarm.get_nth_node(col) ;
+    vector<int> possible_values;
+    possible_values.push_back(node.get_values().size());
+    vector<int> parents_values ; 
+    parents_values.push_back(record[col]) ;
+    vector<int> parents_pos = node.get_Parents_index(); 
+    for (int i = 0; i < parents_pos.size(); ++i) {
+        possible_values.push_back(Alarm.get_nth_node(parents_pos[i]).get_values().size());
+        parents_values.push_back(record[parents_pos[i]]);
+    }
+    int config = get_parent_config(possible_values,parents_values) ;
+    vector<float> CPT = node.get_CPT() ;
+    return CPT[config] ;
+}
+
+
+void smooth(vector<float> v){
+    float sum = 0.0 ; 
+    for(auto it : v) sum+= it ; 
+    for(auto& it : v) it = it/sum ;
+}
 
 void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
     int missingCounter = 0;
@@ -588,7 +624,21 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
         vector<float> CPT = node.get_CPT();
 
         // Sample a value based on the CPT
-        int sampledValue = sample_value(CPT);
+        vector<float> prob_dist(node.get_nvalues()) ;
+        vector<int> record = dataset1.get_record(row);
+        for(int i = 0 ; i < node.get_nvalues() ; i++){
+            float x = 1.0 ; 
+            record[col] = i ;
+            x*= calc(col, record,Alarm) ; 
+            for (auto child: node.get_children()){
+                x*= calc(child, record,Alarm) ; 
+            }   
+            prob_dist[i] = x ;
+        } 
+
+
+        smooth(prob_dist) ; 
+        int sampledValue = sample_value(prob_dist);
 
         // Update dataset2 with the sampled value
 
@@ -633,7 +683,8 @@ int main()
 
 	// cout<<"Perfect! Hurrah! \n";
 
-
+    cout.tie(NULL);     
+    cin.tie(NULL) ; 
 	network Alarm;
 	Alarm=read_network();
 	float maxscore = -1 ; 
