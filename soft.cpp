@@ -54,7 +54,6 @@ public:
 	int nvalues;  // Number of categories a variable represented by this node can take
 	vector<string> values; // Categories of possible values
 	vector<float> CPT; // conditional probability table as a 1-d array . Look for BIF format to understand its meaning
-    vector<int> markov_blanket; // Markov blanket of a node- index of nodes in graph
 	// Constructor- a node is initialised with its name and its categories
     Graph_Node(string name,int n,vector<string> vals)
 	{
@@ -173,36 +172,6 @@ public:
     //         cout<<"node not found\n";
     //     return listIt;
     // }
-
-    void set_markov_blanket(){
-        for (int i = 0; i > Pres_Graph.size(); i++){
-            Graph_Node node = Pres_Graph[i];
-            vector<int> children = node.get_children();
-            vector<string> parents = node.get_Parents();
-            unordered_set <int> markov_blanket;
-            for (int j = 0; j < children.size(); j++){
-                markov_blanket.insert(children[j]);
-            }
-            for (int j = 0; j < parents.size(); j++){
-                markov_blanket.insert(this->get_index(parents[j]));
-            }
-            // maybe duplicates in the below code, maybe set markov blanket as a set to avoid duplicates and at the end convert it to a vector again to keep in line with the format 
-             
-            for (int j = 0; j < children.size(); j++){
-                Graph_Node child = Pres_Graph[children[j]];
-                vector<string> child_parents = child.get_Parents();
-                for (int k = 0; k < child_parents.size(); k++){
-                    markov_blanket.insert(this->get_index(child_parents[k]));
-                }
-            }
-
-            vector<int> markov_blanket_vector;
-            for (auto it = markov_blanket.begin(); it != markov_blanket.end(); it++){
-                markov_blanket_vector.push_back(*it);
-            }
-            node.markov_blanket = markov_blanket_vector;
-        }
-    }
 
     void set_nth_node(int n, Graph_Node node){
         Pres_Graph[n] = node;
@@ -622,16 +591,16 @@ void random_initialise_data(Dataset& dataset1, Dataset& dataset2, network& Alarm
 
 
 
-int sample_value(const vector<float>& probabilities) {
-    if (probabilities.size() == 0) {
-        return -1; 
-    }
-    unsigned seed = static_cast<unsigned>(chrono::system_clock::now().time_since_epoch().count());
-    default_random_engine generator(seed);
-    discrete_distribution<int> distribution(probabilities.begin(), probabilities.end());
-    int sampledIndex = distribution(generator);
-    return sampledIndex; // Convert the index to a string
-}
+// int sample_value(const vector<float>& probabilities) {
+//     if (probabilities.size() == 0) {
+//         return -1; 
+//     }
+//     unsigned seed = static_cast<unsigned>(chrono::system_clock::now().time_since_epoch().count());
+//     default_random_engine generator(seed);
+//     discrete_distribution<int> distribution(probabilities.begin(), probabilities.end());
+//     int sampledIndex = distribution(generator);
+//     return sampledIndex; // Convert the index to a string
+// }
 
 
 
@@ -655,6 +624,8 @@ void evaluate_CPT(network& Alarm, Dataset& dataset) {
 			// cout << 5 << endl ;
             for (int k = 0 ; k < values.size(); k++) {
                 CPT[counts.size()*k + j] = (counts[j][k] + m) / (sum + m*values.size());
+                cout << sum + m*values.size() << endl;
+                cout << CPT[counts.size()*k + j] << endl;
 				// cout << 6 << endl;
             }
         }

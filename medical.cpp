@@ -11,7 +11,7 @@
 #include <chrono>
 #include <algorithm>
 #include <ctime>
-
+#include <chrono>  
 
 using namespace std;
 #define pb push_back 
@@ -604,9 +604,41 @@ float prob_to_be_i_given_parents(Graph_Node node, vector<int> record, network& A
 
 }
 
+Dataset update_count (Dataset& before, Dataset& after, network& Alarm){
+    vector<pair<int, int>> missing_positions = before.get_missing_values_positions();
+    for (const auto& position : missing_positions) {
+        int row = position.first;
+        int col = position.second;
+
+        Graph_Node node = Alarm.Pres_Graph[col];
+        vector<string> possibleValues = node.get_values();
+        
+        // get parent config of a record 
+        // change counts[missing_index]{parents config][old value] -- 
+        // change counts[missing_index]{parents config][new value] ++
+
+        vector<int> parents_pos = node.get_Parents_index();
+        vector<int> parents_values;
+        // parents_values.push_back(after.data_matrix[row][col]);
+        vector<int> possible_values;
+        // possible_values.push_back(node.get_values().size());
+        for (int k = 0; k < parents_pos.size(); ++k) {
+            parents_values.push_back(after.data_matrix[row][parents_pos[k]]);
+            // cout <<record[parents_pos[k]]<<" " ; 
+            possible_values.push_back(Alarm.Pres_Graph[parents_pos[k]].get_values().size());
+        }
+        int pos = get_parent_config(possible_values,parents_values);
+        after.counts[col][pos][before.data_matrix[row][col]]--;
+        after.counts[col][pos][after.data_matrix[row][col]]++;
+
+    }
+    return after ; 
+}
 
 
-void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
+
+void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm, float delta) {
+    Dataset old = dataset2 ; 
     int missingCounter = 0;
     
     for (const auto& missingValue : dataset1.get_missing_values_positions()) {
@@ -644,17 +676,23 @@ void EM_step(Dataset& dataset1, Dataset& dataset2, network& Alarm) {
         // cout  <<5 << endl;
         missingCounter++;
 
-        // if (missingCounter % 40 == 0) {
-        //     cout << 6 << endl;
-		// 	dataset2.set_counts(Alarm);
-        //     evaluate_CPT(Alarm, dataset2); // Update CPT table after sampling every 40 missing values
-        // }
+
+        if (missingCounter % dataset1.data_matrix.size()/(10*delta) == 0) {
+            // cout << 6 << endl;
+			// dataset2.set_counts(Alarm);
+            // evaluate_CPT(Alarm, dataset2); // Update CPT table after sampling every 40 missing values
+            break;
+        }
         // cout << 7 << endl;
     }
-    cout << 8 << endl;
-	dataset2.set_counts(Alarm);
+    // cout << 8 << endl;
+    cout <<"count"<<endl;
+	// dataset2.set_counts(Alarm);
+    dataset2 = update_count(old, dataset2, Alarm);
+    cout<<"start"<<endl;
 	evaluate_CPT(Alarm, dataset2); 
-    print("done it") ; nl ; 
+    cout<<"end"<<endl;
+    // print("done it") ; nl ; 
 }
 
 
@@ -714,11 +752,15 @@ void write_final_bif(network &Alarm, string outfile, string orgfile  ){
 }
 
 
-int main()
+int main(int argc, char* argv[])
 {
-
+    // start timer 
+    auto start = chrono::high_resolution_clock::now();
+    string orgfile = argv[1];
+    string datafile = argv[2];
+    network Goal = read_network("goal.bif") ; 
 	network Alarm;
-	Alarm=read_network("alarm.bif");
+	Alarm=read_network(orgfile);
 	vector<int> x = Alarm.Pres_Graph[1].get_Parents_index() ; 
 		vector<string> y = Alarm.Pres_Graph[1].get_Parents();
 	float maxscore = -1 ; 
@@ -726,24 +768,43 @@ int main()
 	network best_Alarm = Alarm;
 	Dataset dataset1; 
     dataset1.set_variable_value_map(Alarm);
-	read_data_file("records.dat", dataset1) ; 
+	read_data_file(datafile, dataset1) ; 
 	Dataset dataset2 = dataset1  ; 
 
 	while(iterations--){
 		random_initialise_data(dataset1, dataset2, Alarm) ; 
         dataset2.set_counts(Alarm);
-        cout << "done" << endl ;
+        // cout << "done" << endl ;
 		evaluate_CPT(Alarm, dataset2) ;
-		cout<< "khatam bc" << endl; 
-		float epsilon = 0.01; 
+		// cout<< "khatam bc" << endl; 
+		float epsilon = 0.004; 
 		float delta = 1.0; 
         int blah = 0 ; 
-		while(delta > epsilon){
+		while(true){
+            // check if total time more than 120 seconds than break
+            auto stop = chrono::high_resolution_clock::now();
+            auto duration = chrono::duration_cast<chrono::seconds>(stop - start);
+            if (duration.count() > 110){
+                break;
+            }
 			network before = Alarm ; 
-			EM_step(dataset1, dataset2, Alarm) ; 
+			EM_step(dataset1, dataset2, Alarm, delta) ; 
 			delta = calc_change(before, Alarm) ; 
-			cout <<delta<<endl ; 
+			// cout <<delta<<endl ; 
             blah++ ; 
+                print("Now we shall calculate score: "); nl ;
+    print("#############################################################################################################") ; nl ; 
+    float penalty = 0 ; 
+    for(int i= 0; i<Alarm.Pres_Graph.size();i++){
+        vector<float> cpt1= Alarm.Pres_Graph[i].get_CPT() ; 
+        for (float &num : cpt1) num = round(num*10000)/10000.0 ;
+        vector<float> cpt2= Goal.Pres_Graph[i].get_CPT() ; 
+
+        rep(j,0,cpt1.size()) penalty+= abs(cpt1[j] - cpt2[j] ) ; 
+    }
+    print(penalty) ; nl ; 
+    print("#############################################################################################################") ; nl ; 
+
             // cout << blah <<endl ; 
 		}
 		// float score = eval_score(Alarm) ; 
@@ -752,8 +813,8 @@ int main()
         // cout<<"delta "<<delta<<endl;
 		// cout << Alarm.Pres_Graph[1).get_name() <<endl; 
 		// cout <<"matrix printing sadc"<<endl ; 
-		vector<int> x = Alarm.Pres_Graph[1].get_Parents_index() ; 
-		vector<string> y = Alarm.Pres_Graph[1].get_Parents();
+		// vector<int> x = Alarm.Pres_Graph[1].get_Parents_index() ; 
+		// vector<string> y = Alarm.Pres_Graph[1].get_Parents();
 		// cout <<"hello" ; 
 		// for (auto it  : x) cout <<it<<" " ; cout <<endl ;
 		// for (auto it : y) cout << it << " " ; cout << endl ;
@@ -766,22 +827,9 @@ int main()
 		// cout <<"hello" <<endl ; 
         // for(int i = 0 ; i < Alarm.Pres_Graph[1].get_CPT().size(); i++) cout<< Alarm.Pres_Graph[1].get_CPT()[i]<<" ";
         // cout <<endl ;
-        cout <<blah <<endl ; 
+        // cout <<blah <<endl ; 
 	}
-    write_final_bif(Alarm, "solved_alarm.bif", "alarm.bif") ;
+    write_final_bif(Alarm, "solved_alarm.bif", orgfile) ;
 
-    network Goal = read_network("goal.bif") ; 
-    print("Now we shall calculate score: "); nl ;
-    print("#############################################################################################################") ; nl ; 
-    float penalty = 0 ; 
-    for(int i= 0; i<Alarm.Pres_Graph.size();i++){
-        vector<float> cpt1= Alarm.Pres_Graph[i].get_CPT() ; 
-        for (float &num : cpt1) num = round(num*10000)/10000.0 ;
-        vector<float> cpt2= Goal.Pres_Graph[i].get_CPT() ; 
-
-        rep(j,0,cpt1.size()) penalty+= abs(cpt1[j] - cpt2[j] ) ; 
-    }
-    print(penalty) ; nl ; 
-    print("#############################################################################################################") ; nl ; 
 
 }
